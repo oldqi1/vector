@@ -1,0 +1,22 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "{7FAF9F6F-43E0-B2B4-2A19-63B05C956386}",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "Vector",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ModelingToolsEditorMode",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		}
+	]
+}

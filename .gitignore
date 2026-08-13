@@ -1,0 +1,23 @@
+# UE 生成目录
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+
+# IDE
+.vs/
+.vscode/
+*.sln
+*.slnx
+*.vcxproj
+*.vcxproj.filters
+*.user
+*.suo
+
+# Vector 本地遗留（旧骨架参考、UBT 调试残留）
+旧文件/
+ubt_trace_backup/
+
+# 日志/调试临时
+*.log
+Logs/
