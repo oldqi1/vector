@@ -10,6 +10,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
 #include "Gameplay/VectorCharacterMovementComponent.h"
+#include "Hunt/VectorOrganPickup.h"
 #include "Stability/VectorStabilityComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVectorEnemy, Log, All);
@@ -23,6 +24,7 @@ AVectorEnemy::AVectorEnemy(const FObjectInitializer& ObjectInitializer)
 
 	// 近身攻击（P2）：进入攻击范围 → 预警 → 扑击玩家（让三种怪从"追人"变"会打人"）。
 	AttackComponent = CreateDefaultSubobject<UVectorEnemyAttackComponent>(TEXT("EnemyAttack"));
+	OrganPickupClass = AVectorOrganPickup::StaticClass();
 }
 
 void AVectorEnemy::BeginPlay()
@@ -75,7 +77,17 @@ void AVectorEnemy::HandleDeath()
 			*GetName(), LethalLaunchMaximumLifetimeSeconds);
 		return;
 	}
+	SpawnOrganDrop(TEXT("normal death"));
 	Destroy();
+}
+
+void AVectorEnemy::Destroyed()
+{
+	if (bLethalLaunchDeathActive)
+	{
+		SpawnOrganDrop(TEXT("lethal projectile lifetime ended"));
+	}
+	Super::Destroyed();
 }
 
 void AVectorEnemy::HandleLethalLaunchBodyImpact(AActor* OtherActor)
@@ -103,11 +115,32 @@ void AVectorEnemy::ScheduleLethalLaunchDespawn(const TCHAR* Reason)
 		return;
 	}
 	bLethalLaunchImpactSeen = true;
+	SpawnOrganDrop(Reason);
 	const double Delay = FMath::Max(0.01, LethalLaunchImpactDespawnDelaySeconds);
 	SetLifeSpan(static_cast<float>(Delay));
 	UE_LOG(LogVectorEnemy, Log,
 		TEXT("Lethal launch impact: enemy=%s reason=%s despawnIn=%.2fs"),
 		*GetName(), Reason ? Reason : TEXT("unknown"), Delay);
+}
+
+void AVectorEnemy::SpawnOrganDrop(const TCHAR* Reason)
+{
+	if (bOrganDropSpawned || !GetWorld() || !OrganPickupClass)
+	{
+		return;
+	}
+	bOrganDropSpawned = true;
+	FActorSpawnParameters SpawnParameters;
+	SpawnParameters.SpawnCollisionHandlingOverride =
+		ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	const FVector SpawnLocation = GetActorLocation() + FVector(0.0, 0.0, 55.0);
+	AVectorOrganPickup* Pickup = GetWorld()->SpawnActor<AVectorOrganPickup>(
+		OrganPickupClass, SpawnLocation, FRotator::ZeroRotator, SpawnParameters);
+	UE_LOG(LogVectorEnemy, Log,
+		TEXT("Enemy organ drop: enemy=%s pickup=%s reason=%s location=%s"),
+		*GetName(), *GetNameSafe(Pickup),
+		Reason ? Reason : TEXT("unknown"),
+		*SpawnLocation.ToCompactString());
 }
 
 void AVectorEnemy::ApplyArchetypeConfiguration()

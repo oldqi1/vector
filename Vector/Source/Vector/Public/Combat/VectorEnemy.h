@@ -6,6 +6,8 @@
 #include "Combat/VectorTestDummy.h"
 #include "VectorEnemy.generated.h"
 
+class AVectorOrganPickup;
+
 /**
  * 敌人三型枚举（S04，灰盒期一个类三型配置，攻击行为分化后再拆子类）。
  */
@@ -69,6 +71,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Enemy|Death", meta = (ClampMin = "0.0", Units = "s"))
 	double LethalLaunchImpactDespawnDelaySeconds = 0.18;
 
+	/** Greybox organ spawned on normal death or at a lethal projectile's final impact. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Vector|Enemy|Death")
+	TSubclassOf<AVectorOrganPickup> OrganPickupClass;
+
 	/** 失衡/倒地/冲量驱动期间是否应暂停 AI（控制器在 Tick 中查询）。 */
 	bool ShouldPauseAI() const;
 
@@ -87,11 +93,15 @@ protected:
 	void HandleDeath();
 
 private:
+	virtual void Destroyed() override;
+
 	void HandleLethalLaunchBodyImpact(AActor* OtherActor);
 	void HandleLethalLaunchSurfaceImpact(double ImpactSpeedCmPerSecond);
 	void ScheduleLethalLaunchDespawn(const TCHAR* Reason);
+	void SpawnOrganDrop(const TCHAR* Reason);
 
 	bool bLethalLaunchArmed = false;
 	bool bLethalLaunchDeathActive = false;
 	bool bLethalLaunchImpactSeen = false;
+	bool bOrganDropSpawned = false;
 };

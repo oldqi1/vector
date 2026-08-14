@@ -24,6 +24,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|KillAttribution")
 	TObjectPtr<class UVectorKillAttributionComponent> KillAttribution;
 
+	/** Current hunt's collected greybox organs. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Hunt")
+	TObjectPtr<class UVectorHuntProgressComponent> HuntProgress;
+
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 };

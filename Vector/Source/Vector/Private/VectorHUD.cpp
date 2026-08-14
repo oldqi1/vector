@@ -11,8 +11,10 @@
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "Hunt/VectorHuntProgressComponent.h"
 #include "Physics/VectorPhysicsModifierComponent.h"
 #include "VectorCharacter.h"
+#include "VectorGameMode.h"
 
 void AVectorHUD::DrawHUD()
 {
@@ -24,6 +26,20 @@ void AVectorHUD::DrawHUD()
 
 	if (APawn* PlayerPawn = PlayerOwner->GetPawn())
 	{
+		if (GEngine)
+		{
+			const AVectorGameMode* GameMode = GetWorld()
+				? GetWorld()->GetAuthGameMode<AVectorGameMode>() : nullptr;
+			if (const UVectorHuntProgressComponent* Hunt = GameMode
+				? GameMode->HuntProgress : nullptr)
+			{
+				DrawText(
+					FString::Printf(TEXT("ORGANS: %d"), Hunt->GetCollectedOrgans()),
+					FLinearColor(0.25f, 1.0f, 0.4f),
+					40.0f, 36.0f,
+					GEngine->GetMediumFont(), 1.0f, false);
+			}
+		}
 		if (const UVectorHealthComponent* Health =
 			PlayerPawn->FindComponentByClass<UVectorHealthComponent>())
 		{
