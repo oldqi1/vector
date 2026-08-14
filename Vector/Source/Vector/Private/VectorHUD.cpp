@@ -65,8 +65,20 @@ void AVectorHUD::DrawHUD()
 				}
 				else if (Encounter->GetEncounterState() == EVectorEncounterState::Active)
 				{
-					ContractText = FString::Printf(TEXT("CONTRACT: HUNT  %d / %d"),
-						Encounter->GetRemainingEnemies(), Encounter->GetTotalEnemies());
+					if (Encounter->IsDynamicEncounter()
+						&& !Encounter->IsEncounterSealed()
+						&& Encounter->GetRemainingEnemies() == 0)
+					{
+						ContractText = Encounter->GetTotalEnemies() == 0
+							? TEXT("CONTRACT: ENTER THE HUNT")
+							: TEXT("ROOM CLEAR - ADVANCE");
+						ContractColor = FLinearColor(0.25f, 0.9f, 1.0f);
+					}
+					else
+					{
+						ContractText = FString::Printf(TEXT("CONTRACT: HUNT  %d / %d"),
+							Encounter->GetRemainingEnemies(), Encounter->GetTotalEnemies());
+					}
 				}
 				if (!ContractText.IsEmpty())
 				{

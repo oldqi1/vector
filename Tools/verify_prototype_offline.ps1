@@ -50,6 +50,7 @@ try {
         @{ Path = "Vector/Source/Vector/Private/Hunt/VectorExtractionZone.cpp"; Text = "Hunt run summary" },
         @{ Path = "Vector/Source/Vector/Private/Hunt/VectorExtractionZone.cpp"; Text = "Hunt PCG summary" },
         @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "EXIT LOCKED - CLEAR ALL" },
+        @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "ROOM CLEAR - ADVANCE" },
         @{ Path = "Tools/Greybox/setup_greybox_arena.py"; Text = "GA_ExtractionZone" },
         @{ Path = "Vector/Source/Vector/Private/PCG/VectorTacticalGenerationLibrary.cpp"; Text = "FVectorTacticalGenerator::Generate" },
         @{ Path = "Tools/Greybox/setup_tactical_pcg_preview.py"; Text = "generate_module_sequence" },

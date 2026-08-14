@@ -57,6 +57,8 @@ bool FVectorDynamicEncounterLedgerTest::RunTest(const FString& Parameters)
 	}
 
 	Encounter->BeginDynamicEncounter();
+	TestTrue(TEXT("Dynamic flag is exposed"), Encounter->IsDynamicEncounter());
+	TestFalse(TEXT("Fresh dynamic contract is unsealed"), Encounter->IsEncounterSealed());
 	TestEqual(TEXT("Dynamic contract starts active at zero"),
 		Encounter->GetEncounterState(), EVectorEncounterState::Active);
 	TestFalse(TEXT("Unsealed zero is not complete"), Encounter->IsComplete());
@@ -67,6 +69,7 @@ bool FVectorDynamicEncounterLedgerTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Between waves does not complete"), Encounter->IsComplete());
 	TestTrue(TEXT("Second wave accepted after zero gap"), Encounter->AddEncounterEnemies(1));
 	Encounter->SealDynamicEncounter();
+	TestTrue(TEXT("Seal state is exposed"), Encounter->IsEncounterSealed());
 	TestFalse(TEXT("Sealed contract waits for final enemy"), Encounter->IsComplete());
 	Encounter->NotifyEnemyDefeated();
 	TestTrue(TEXT("Final sealed wave completes"), Encounter->IsComplete());

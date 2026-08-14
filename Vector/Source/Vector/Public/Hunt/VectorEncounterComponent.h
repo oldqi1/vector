@@ -68,6 +68,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Vector|Hunt")
 	bool IsComplete() const { return EncounterState == EVectorEncounterState::Completed; }
 
+	UFUNCTION(BlueprintPure, Category = "Vector|Hunt")
+	bool IsDynamicEncounter() const { return bDynamicEncounterActive; }
+
+	UFUNCTION(BlueprintPure, Category = "Vector|Hunt")
+	bool IsEncounterSealed() const { return bEncounterSealed; }
+
 	/** Seconds since the encounter began, frozen when the final enemy dies. */
 	UFUNCTION(BlueprintPure, Category = "Vector|Hunt")
 	double GetElapsedSeconds() const;
