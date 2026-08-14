@@ -63,6 +63,7 @@ try {
         @{ Path = "Tools/Greybox/setup_tactical_pcg_preview.py"; Text = "wave_one_exit_gate" },
         @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGEncounterDirector.cpp"; Text = "SetGateLocked(false)" },
         @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGEncounterDirector.cpp"; Text = "HandleRoomEntered" },
+        @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGEncounterDirector.cpp"; Text = "configuration rejected" },
         @{ Path = "Tools/Greybox/setup_tactical_pcg_preview.py"; Text = "room_activation_triggers" },
         @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGRoomTrigger.cpp"; Text = "SetRespawnCheckpoint" },
         @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "MAGNET-SHELL BEAST" },

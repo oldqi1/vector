@@ -301,7 +301,9 @@ def main(seed=SEED):
         ROOM_TRIGGERS.append(trigger)
 
     build_navmesh(classes["navmesh"], len(sequence))
-    if (len(ENCOUNTER_WAVES) != 2 or BOSS_SPAWN_POINT is None
+    if (len(ENCOUNTER_WAVES) != 2
+            or any(len(wave) != 8 for wave in ENCOUNTER_WAVES)
+            or BOSS_SPAWN_POINT is None
             or BOSS_OVERLOAD_FRICTION_ZONE is None or len(WAVE_GATES) != 2
             or len(ROOM_TRIGGERS) != 3):
         raise RuntimeError(

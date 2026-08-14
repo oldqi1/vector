@@ -33,6 +33,14 @@ void AVectorPCGEncounterDirector::BeginPlay()
 			TEXT("PCG encounter director has no hunt ledger: actor=%s"), *GetName());
 		return;
 	}
+	FString ConfigurationFailure;
+	if (!ValidateRouteConfiguration(ConfigurationFailure))
+	{
+		UE_LOG(LogVectorPCGEncounter, Error,
+			TEXT("PCG encounter configuration rejected: actor=%s reason=%s"),
+			*GetName(), *ConfigurationFailure);
+		return;
+	}
 
 	Encounter->BeginDynamicEncounter();
 	if (WaveOneExitGate)
@@ -59,6 +67,87 @@ void AVectorPCGEncounterDirector::BeginPlay()
 			TEXT("PCG route has no room triggers; activating first wave immediately"));
 		SpawnNextWave();
 	}
+}
+
+bool AVectorPCGEncounterDirector::ValidateRouteConfiguration(
+	FString& OutFailureReason) const
+{
+	OutFailureReason.Reset();
+	if (!EnemyClass || !BossClass)
+	{
+		OutFailureReason = TEXT("enemy or Boss class missing");
+		return false;
+	}
+	if (!bRequireFormalRouteConfiguration)
+	{
+		return true;
+	}
+	if (EncounterWaveOneSpawns.Num() != 8 || EncounterWaveTwoSpawns.Num() != 8)
+	{
+		OutFailureReason = FString::Printf(
+			TEXT("regular wave budget must be 8/8, found %d/%d"),
+			EncounterWaveOneSpawns.Num(), EncounterWaveTwoSpawns.Num());
+		return false;
+	}
+	for (const AActor* SpawnPoint : EncounterWaveOneSpawns)
+	{
+		if (!SpawnPoint)
+		{
+			OutFailureReason = TEXT("wave one contains null spawn point");
+			return false;
+		}
+	}
+	for (const AActor* SpawnPoint : EncounterWaveTwoSpawns)
+	{
+		if (!SpawnPoint)
+		{
+			OutFailureReason = TEXT("wave two contains null spawn point");
+			return false;
+		}
+	}
+	if (!BossSpawnPoint || BossAddSpawnPoints.Num() != 2
+		|| !BossAddSpawnPoints[0] || !BossAddSpawnPoints[1])
+	{
+		OutFailureReason = TEXT("Boss wave requires one Boss and two add spawn points");
+		return false;
+	}
+	if (!WaveOneExitGate || !WaveTwoExitGate)
+	{
+		OutFailureReason = TEXT("two sequential wave gates are required");
+		return false;
+	}
+	if (RoomActivationTriggers.Num() != 3)
+	{
+		OutFailureReason = FString::Printf(
+			TEXT("three room activation triggers required, found %d"),
+			RoomActivationTriggers.Num());
+		return false;
+	}
+	bool bRoomIndices[3] = { false, false, false };
+	for (const AVectorPCGRoomTrigger* Trigger : RoomActivationTriggers)
+	{
+		if (!Trigger || Trigger->RoomIndex < 0 || Trigger->RoomIndex >= 3
+			|| bRoomIndices[Trigger->RoomIndex])
+		{
+			OutFailureReason = TEXT("room trigger indices must be unique 0/1/2");
+			return false;
+		}
+		bRoomIndices[Trigger->RoomIndex] = true;
+	}
+	if (!BossOverloadFrictionZone)
+	{
+		OutFailureReason = TEXT("Boss overload friction zone missing");
+		return false;
+	}
+	if (ModuleSequence.Num() != 5
+		|| ModuleSequence[0] != TEXT("SafeStart")
+		|| ModuleSequence[3] != TEXT("BossRing")
+		|| ModuleSequence[4] != TEXT("Extraction"))
+	{
+		OutFailureReason = TEXT("module sequence must be SafeStart>room>room>BossRing>Extraction");
+		return false;
+	}
+	return true;
 }
 
 void AVectorPCGEncounterDirector::HandleRoomEntered(const int32 RoomIndex)

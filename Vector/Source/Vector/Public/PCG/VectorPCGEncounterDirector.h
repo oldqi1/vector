@@ -83,6 +83,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
 	TSubclassOf<AVectorPhysicsBoss> BossClass;
 
+	/** Enforces the first formal slice contract (8 + 8 + Boss/2 adds). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
+	bool bRequireFormalRouteConfiguration = true;
+
 private:
 	UFUNCTION()
 	void HandleEncounterProgress(int32 RemainingEnemies, int32 TotalEnemies);
@@ -96,6 +100,7 @@ private:
 	void HandleRoomEntered(int32 RoomIndex);
 
 	void SpawnNextWave();
+	bool ValidateRouteConfiguration(FString& OutFailureReason) const;
 	int32 SpawnEncounterWave(const TArray<TObjectPtr<AActor>>& SpawnPoints, int32 WaveIndex);
 	int32 SpawnBossWave();
 	AVectorEnemy* SpawnEnemyAt(AActor* SpawnPoint, int32 SpawnIndex);
