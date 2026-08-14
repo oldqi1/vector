@@ -5,6 +5,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Combat/VectorKillAttributionComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
@@ -83,9 +84,22 @@ void AVectorExtractionZone::HandleOverlap(
 
 	if (Hunt->CompleteExtraction())
 	{
+		const int32 TotalEnemies = Encounter->GetTotalEnemies();
+		const double CollectionRate = TotalEnemies > 0
+			? static_cast<double>(Hunt->GetSecuredOrgans()) / static_cast<double>(TotalEnemies)
+			: 0.0;
 		UE_LOG(LogVectorExtraction, Log,
 			TEXT("Extraction completed: player=%s organs=%d"),
 			*GetNameSafe(OtherActor), Hunt->GetSecuredOrgans());
+		UE_LOG(LogVectorExtraction, Log,
+			TEXT("Hunt run summary: elapsed=%.1fs defeated=%d/%d organs=%d collection=%.0f%%"),
+			Encounter->GetElapsedSeconds(),
+			TotalEnemies - Encounter->GetRemainingEnemies(), TotalEnemies,
+			Hunt->GetSecuredOrgans(), CollectionRate * 100.0);
+		if (GameMode->KillAttribution)
+		{
+			GameMode->KillAttribution->LogSummary();
+		}
 		Trigger->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		MarkerLight->SetIntensity(8500.0f);
 	}

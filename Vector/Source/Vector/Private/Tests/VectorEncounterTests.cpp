@@ -31,6 +31,7 @@ bool FVectorEncounterLedgerTest::RunTest(const FString& Parameters)
 	Encounter->NotifyEnemyDefeated();
 	TestEqual(TEXT("Final defeat reaches zero"), Encounter->GetRemainingEnemies(), 0);
 	TestTrue(TEXT("Final defeat completes contract"), Encounter->IsComplete());
+	TestTrue(TEXT("Completed encounter duration is non-negative"), Encounter->GetElapsedSeconds() >= 0.0);
 
 	Encounter->NotifyEnemyDefeated();
 	TestEqual(TEXT("Extra defeat cannot underflow"), Encounter->GetRemainingEnemies(), 0);

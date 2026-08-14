@@ -38,6 +38,8 @@ void UVectorEncounterComponent::StartEncounter(const int32 EnemyCount)
 	EncounterState = TotalEnemies > 0
 		? EVectorEncounterState::Active
 		: EVectorEncounterState::Inactive;
+	StartTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	CompletionTimeSeconds = 0.0;
 
 	UE_LOG(LogVectorEncounter, Log,
 		TEXT("Encounter started: state=%s total=%d"),
@@ -65,10 +67,24 @@ void UVectorEncounterComponent::NotifyEnemyDefeated()
 	if (RemainingEnemies == 0)
 	{
 		EncounterState = EVectorEncounterState::Completed;
+		CompletionTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : StartTimeSeconds;
 		UE_LOG(LogVectorEncounter, Log,
-			TEXT("Contract completed: defeated=%d exit=OPEN"), TotalEnemies);
+			TEXT("Contract completed: defeated=%d elapsed=%.1fs exit=OPEN"),
+			TotalEnemies, GetElapsedSeconds());
 		OnEncounterCompleted.Broadcast();
 	}
+}
+
+double UVectorEncounterComponent::GetElapsedSeconds() const
+{
+	if (EncounterState == EVectorEncounterState::Inactive)
+	{
+		return 0.0;
+	}
+	const double EndTime = EncounterState == EVectorEncounterState::Completed
+		? CompletionTimeSeconds
+		: (GetWorld() ? GetWorld()->GetTimeSeconds() : StartTimeSeconds);
+	return FMath::Max(0.0, EndTime - StartTimeSeconds);
 }
 
 void UVectorEncounterComponent::RegisterExistingEnemies()

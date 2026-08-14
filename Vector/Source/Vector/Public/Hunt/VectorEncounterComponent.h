@@ -55,6 +55,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Vector|Hunt")
 	bool IsComplete() const { return EncounterState == EVectorEncounterState::Completed; }
 
+	/** Seconds since the encounter began, frozen when the final enemy dies. */
+	UFUNCTION(BlueprintPure, Category = "Vector|Hunt")
+	double GetElapsedSeconds() const;
+
 	UPROPERTY(BlueprintAssignable, Category = "Vector|Hunt")
 	FVectorEncounterProgressSignature OnEncounterProgress;
 
@@ -75,6 +79,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Vector|Hunt")
 	int32 RemainingEnemies = 0;
+
+	double StartTimeSeconds = 0.0;
+	double CompletionTimeSeconds = 0.0;
 
 	TSet<TWeakObjectPtr<UVectorHealthComponent>> RegisteredHealthComponents;
 };
