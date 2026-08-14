@@ -76,7 +76,7 @@ public:
 	TSubclassOf<AVectorOrganPickup> OrganPickupClass;
 
 	/** 失衡/倒地/冲量驱动期间是否应暂停 AI（控制器在 Tick 中查询）。 */
-	bool ShouldPauseAI() const;
+	virtual bool ShouldPauseAI() const;
 
 	/** 近身攻击组件（P2：预警→扑击玩家；攻击中暂停追击）。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Enemy")

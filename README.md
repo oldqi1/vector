@@ -56,6 +56,7 @@ Vector/
 4. **手动试玩**：鼠标移动只负责瞄准；`1–5` 选择冲量锤/绳线枪/润滑剂/浮空孢子/升空叉，`LMB` 使用当前装备，`RMB`（或 `MMB`）按住拖动旋转镜头，`Space` 跳跃
 5. **测试**：编辑器 Session Frontend → Automation，搜 `Vector.` 前缀跑全部（本机 Zen 异常，勿用命令行无头跑）
 6. **组合测试靶**（可选）：执行 `Tools/Greybox/setup_physics_combo_test.py`，生成绳线枪双怪/锚墙、调质、撞墙爆发、挑飞/落地震荡专用静止靶
+7. **首个物理 Boss**（可选）：执行 `Tools/Greybox/setup_physics_boss_test.py`，生成 BossRing、`AVectorPhysicsBoss` 与两只轻型“弹药怪”，再 `Build Paths → Play`
 
 本轮统一 PIE 成功标准见 `Docs/最小狩猎闭环验收_2026-08-14.md`。
 
