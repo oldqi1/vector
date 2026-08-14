@@ -37,16 +37,44 @@ class VECTOR_API AVectorEnemy : public AVectorTestDummy
 public:
 	AVectorEnemy(const FObjectInitializer& ObjectInitializer);
 
+	/**
+	 * Arms a lethal hammer hit to launch this enemy as a short-lived projectile
+	 * instead of destroying it immediately when health reaches zero.
+	 */
+	void PrepareForHammerLethalLaunch();
+
+	bool IsLethalLaunchCorpse() const { return bLethalLaunchDeathActive; }
+
 	/** 敌人三型配置。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Enemy")
 	EVectorEnemyArchetype Archetype = EVectorEnemyArchetype::LightHoppper;
 
-	/** 常态移动速度（WalkSpeed），cm/s。 */
+	/** 常态移动速度（WalkSpeed），cm/s（ApplyArchetypeConfiguration 时按三型设置基准值）。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Enemy", meta = (ClampMin = "0.0", Units = "cm/s"))
 	double MoveSpeedCmPerSecond = 300.0;
 
+	/**
+	 * 每只实例的速度浮动比例（±，如 0.1 = ±10%）：同种怪追着追着因速度差异自然拉开队形，
+	 * 避免挤成一团导致撞击效果不可见（对齐 PVZ 普通僵尸"速度不固定"）。
+	 * 用比例而非绝对值，保证种间基准速度差距不被浮动吞掉（跳囊虫 420 始终快于角槌兽 320）。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Enemy", meta = (ClampMin = "0.0", ClampMax = "0.5"))
+	double MoveSpeedVarianceRatio = 0.1;
+
+	/** Maximum travel time for a hammer-killed enemy that has not hit anything. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Enemy|Death", meta = (ClampMin = "0.1", Units = "s"))
+	double LethalLaunchMaximumLifetimeSeconds = 1.75;
+
+	/** Brief visual hold after the lethal projectile's first body/wall impact. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Enemy|Death", meta = (ClampMin = "0.0", Units = "s"))
+	double LethalLaunchImpactDespawnDelaySeconds = 0.18;
+
 	/** 失衡/倒地/冲量驱动期间是否应暂停 AI（控制器在 Tick 中查询）。 */
 	bool ShouldPauseAI() const;
+
+	/** 近身攻击组件（P2：预警→扑击玩家；攻击中暂停追击）。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Enemy")
+	TObjectPtr<class UVectorEnemyAttackComponent> AttackComponent;
 
 protected:
 	virtual void BeginPlay() override;
@@ -57,4 +85,13 @@ protected:
 	/** 生命归零回调（灰盒期销毁；正式期替换为倒地/掉落表现）。 */
 	UFUNCTION()
 	void HandleDeath();
+
+private:
+	void HandleLethalLaunchBodyImpact(AActor* OtherActor);
+	void HandleLethalLaunchSurfaceImpact(double ImpactSpeedCmPerSecond);
+	void ScheduleLethalLaunchDespawn(const TCHAR* Reason);
+
+	bool bLethalLaunchArmed = false;
+	bool bLethalLaunchDeathActive = false;
+	bool bLethalLaunchImpactSeen = false;
 };

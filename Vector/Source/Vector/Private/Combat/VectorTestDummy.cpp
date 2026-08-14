@@ -4,13 +4,19 @@
 
 #include "Combat/VectorHealthComponent.h"
 #include "Combat/VectorImpactCollisionComponent.h"
+#include "Combat/VectorWallBurstComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/World.h"
 #include "Gameplay/VectorCharacterMovementComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Physics/VectorPhysicsModifierComponent.h"
 #include "Stability/VectorStabilityComponent.h"
 #include "UObject/ConstructorHelpers.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogVectorPresentation, Log, All);
 
 AVectorTestDummy::AVectorTestDummy(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UVectorCharacterMovementComponent>(
@@ -33,8 +39,10 @@ AVectorTestDummy::AVectorTestDummy(const FObjectInitializer& ObjectInitializer)
 	StabilityComponent->MassClass = MassClass;
 
 	ImpactCollisionComponent = CreateDefaultSubobject<UVectorImpactCollisionComponent>(TEXT("ImpactCollision"));
+	WallBurstComponent = CreateDefaultSubobject<UVectorWallBurstComponent>(TEXT("WallBurst"));
 
 	HealthComponent = CreateDefaultSubobject<UVectorHealthComponent>(TEXT("Health"));
+	PhysicsModifierComponent = CreateDefaultSubobject<UVectorPhysicsModifierComponent>(TEXT("PhysicsModifier"));
 
 	BodyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyMesh"));
 	BodyMesh->SetupAttachment(GetCapsuleComponent());
@@ -42,6 +50,17 @@ AVectorTestDummy::AVectorTestDummy(const FObjectInitializer& ObjectInitializer)
 	BodyMesh->SetRelativeScale3D(FVector(0.9f));
 	BodyMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	BodyMesh->SetGenerateOverlapEvents(false);
+
+	// 材质参数在不同引擎版本/基础材质中可能不存在，因此额外挂一个真实点光源，
+	// 再配合尺寸脉冲保证预警在 Lit/Unlit 视图下都能被玩家看见。
+	AttackWarningLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("AttackWarningLight"));
+	AttackWarningLight->SetupAttachment(GetCapsuleComponent());
+	AttackWarningLight->SetRelativeLocation(FVector(0.0, 0.0, 60.0));
+	AttackWarningLight->SetLightColor(FLinearColor::White);
+	AttackWarningLight->SetIntensity(0.0f);
+	AttackWarningLight->SetAttenuationRadius(500.0f);
+	AttackWarningLight->SetCastShadows(false);
+	AttackWarningLight->SetVisibility(false);
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMeshFinder(
 		TEXT("/Engine/BasicShapes/Cube.Cube"));
@@ -82,29 +101,97 @@ void AVectorTestDummy::UpdateStaggerPresentation()
 	// 稳定度状态 → 表现（灰盒期用旋转+颜色表达失衡/倒地）：
 	// Stable/Rising = 直立原色；Unbalanced = 白色闪亮；Downed = 躺平（绕 X 旋转 90°）+ 暗色。
 	const EVectorStabilityState State = StabilityComponent->GetState();
+	float WarningPulseAlpha = 0.0f;
+	if (bAttackWarningActive)
+	{
+		const double TimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+		WarningPulseAlpha = 0.5f + 0.5f * FMath::Sin(static_cast<float>(TimeSeconds * UE_TWO_PI * 8.0));
+		BodyMesh->SetRelativeScale3D(BaseBodyScale * (1.08f + 0.12f * WarningPulseAlpha));
+	}
+	else
+	{
+		BodyMesh->SetRelativeScale3D(BaseBodyScale);
+	}
+	if (AttackWarningLight)
+	{
+		const bool bModifierVisible = bLubricatedPresentation || bBuoyantPresentation;
+		AttackWarningLight->SetVisibility(bAttackWarningActive || bModifierVisible);
+		if (bAttackWarningActive)
+		{
+			AttackWarningLight->SetLightColor(FLinearColor::White);
+			AttackWarningLight->SetIntensity(9000.0f + 9000.0f * WarningPulseAlpha);
+		}
+		else if (bBuoyantPresentation)
+		{
+			AttackWarningLight->SetLightColor(FLinearColor(0.15f, 0.85f, 1.0f));
+			AttackWarningLight->SetIntensity(bLubricatedPresentation ? 6500.0f : 5000.0f);
+		}
+		else if (bLubricatedPresentation)
+		{
+			AttackWarningLight->SetLightColor(FLinearColor(0.08f, 0.25f, 1.0f));
+			AttackWarningLight->SetIntensity(4500.0f);
+		}
+		else
+		{
+			AttackWarningLight->SetIntensity(0.0f);
+		}
+	}
 
 	if (State == EVectorStabilityState::Downed)
 	{
 		BodyMesh->SetRelativeRotation(FRotator(90.0, 0.0, 0.0));
-		UMaterialInstanceDynamic* Material = BodyMesh->CreateAndSetMaterialInstanceDynamic(0);
-		if (Material)
+		if (BodyMaterial)
 		{
-			Material->SetVectorParameterValue(TEXT("Color"), BaseBodyColor * 0.45f);
+			BodyMaterial->SetVectorParameterValue(TEXT("Color"), BaseBodyColor * 0.45f);
 		}
 	}
 	else
 	{
 		BodyMesh->SetRelativeRotation(FRotator::ZeroRotator);
-		UMaterialInstanceDynamic* Material = BodyMesh->CreateAndSetMaterialInstanceDynamic(0);
-		if (Material)
+		if (BodyMaterial)
 		{
-			// 失衡（Unbalanced）短暂白闪，可读"现在可以推"。
-			const FLinearColor TargetColor = (State == EVectorStabilityState::Unbalanced)
-				? FLinearColor::White
-				: BaseBodyColor;
-			Material->SetVectorParameterValue(TEXT("Color"), TargetColor);
+			// 攻击预警或失衡时白闪；结束后准确恢复当前质量档原色。
+			FLinearColor TargetColor = BaseBodyColor;
+			if (bLubricatedPresentation && bBuoyantPresentation)
+			{
+				TargetColor = FLinearColor(0.1f, 1.0f, 1.0f);
+			}
+			else if (bBuoyantPresentation)
+			{
+				TargetColor = FLinearColor(0.2f, 0.85f, 1.0f);
+			}
+			else if (bLubricatedPresentation)
+			{
+				TargetColor = FLinearColor(0.08f, 0.25f, 1.0f);
+			}
+			if (bAttackWarningActive || State == EVectorStabilityState::Unbalanced)
+			{
+				TargetColor = FLinearColor::White;
+			}
+			BodyMaterial->SetVectorParameterValue(TEXT("Color"), TargetColor);
 		}
 	}
+}
+
+void AVectorTestDummy::SetPhysicsModifierPresentation(
+	const bool bLubricated,
+	const bool bBuoyant)
+{
+	bLubricatedPresentation = bLubricated;
+	bBuoyantPresentation = bBuoyant;
+	UpdateStaggerPresentation();
+}
+
+void AVectorTestDummy::SetAttackWarningPresentation(const bool bActive)
+{
+	if (bAttackWarningActive == bActive)
+	{
+		return;
+	}
+	bAttackWarningActive = bActive;
+	UpdateStaggerPresentation();
+	UE_LOG(LogVectorPresentation, Log, TEXT("Attack warning visual: actor=%s active=%s"),
+		*GetName(), bActive ? TEXT("YES") : TEXT("no"));
 }
 
 void AVectorTestDummy::ApplyMassPresentation()
@@ -135,7 +222,8 @@ void AVectorTestDummy::ApplyMassPresentation()
 		break;
 	}
 
-	BodyMesh->SetRelativeScale3D(Scale);
+	BaseBodyScale = Scale;
+	BodyMesh->SetRelativeScale3D(BaseBodyScale);
 
 	// Cube 原点在网格中心：把方块中心抬到"地面以上自身高度一半"，
 	// 使方块底部正好落在胶囊底部（= 地面），避免半埋入地。
@@ -144,9 +232,12 @@ void AVectorTestDummy::ApplyMassPresentation()
 		FVector(0.0, 0.0, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() + BodyHalfHeightCm));
 
 	BaseBodyColor = Color;
-	UMaterialInstanceDynamic* Material = BodyMesh->CreateAndSetMaterialInstanceDynamic(0);
-	if (Material)
+	if (!BodyMaterial)
 	{
-		Material->SetVectorParameterValue(TEXT("Color"), Color);
+		BodyMaterial = BodyMesh->CreateAndSetMaterialInstanceDynamic(0);
+	}
+	if (BodyMaterial)
+	{
+		BodyMaterial->SetVectorParameterValue(TEXT("Color"), Color);
 	}
 }

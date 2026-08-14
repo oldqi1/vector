@@ -70,6 +70,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Vector|Stability")
 	double GetMassMultiplierByClass(EVectorMassClass InMassClass) const { return GetMassMultiplier(InMassClass); }
 
+	/** 当前质量档对应的统一物理有效质量；失衡时自动使用脱锚质量。 */
+	UFUNCTION(BlueprintPure, Category = "Vector|Stability")
+	double GetEffectivePhysicalMass() const;
+
 	UFUNCTION(BlueprintPure, Category = "Vector|Stability")
 	double GetStateSecondsRemaining() const { return Ledger.StateSecondsRemaining; }
 
@@ -111,6 +115,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Stability", meta = (ClampMin = "0.0", Units = "s"))
 	double RisingDurationSeconds = 0.40;
 
+	/**
+	 * 轻质量目标（跳囊虫/弹药）的失衡总时长倍率：轻怪被锤应当直接飞出去继续做连锁弹药，
+	 * 失衡倒地（1.6s）会打断节奏且视觉上像"被打停"（用户裁决 2026-08-14）。
+	 * 0.05 倍 → 失衡 0.01s / 倒地 0.08s / 起身 0.02s ≈ 0.11s 瞬态趔趄；
+	 * 中/重质量保持标准时长（重物失衡 = 脱锚黄金窗口，不能缩短）。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Stability", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	double LightStaggerDurationMultiplier = 0.05;
+
 	// ---- 质量三档系数（碰撞伤害：重物一旦动起来威力极高） ----
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Stability|Mass", meta = (ClampMin = "0.0"))
@@ -121,6 +134,26 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Stability|Mass", meta = (ClampMin = "0.0"))
 	double HeavyMassMultiplier = 1.4;
+
+	// ---- 统一物理质量（锤击 I/m 与怪物互撞共同读取，禁止各组件复制质量表） ----
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Stability|PhysicalMass", meta = (ClampMin = "0.1"))
+	double PhysicalMassLight = 1.25;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Stability|PhysicalMass", meta = (ClampMin = "0.1"))
+	double PhysicalMassMedium = 2.5;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Stability|PhysicalMass", meta = (ClampMin = "0.1"))
+	double PhysicalMassHeavy = 5.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Stability|PhysicalMass|Staggered", meta = (ClampMin = "0.1"))
+	double StaggeredPhysicalMassLight = 1.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Stability|PhysicalMass|Staggered", meta = (ClampMin = "0.1"))
+	double StaggeredPhysicalMassMedium = 1.5;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Stability|PhysicalMass|Staggered", meta = (ClampMin = "0.1"))
+	double StaggeredPhysicalMassHeavy = 2.0;
 
 	// ---- 碰撞类型系数（基线公式预留；撞墙/落地语义待 S03 碰撞连锁接入） ----
 
@@ -136,6 +169,9 @@ public:
 private:
 	/** 把 UPROPERTY 配置同步到纯账本；BeginPlay 与首次结算前幂等调用。 */
 	void ApplyConfiguration();
+
+	/** 失衡/倒地/起身时长按当前质量档同步到账本（轻质量按倍率缩短，中/重标准）。 */
+	void SyncStaggerDurations();
 
 	double GetMassMultiplier(EVectorMassClass InMassClass) const;
 	double GetImpactTypeMultiplier(EVectorImpactType ImpactType) const;

@@ -1,0 +1,264 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+#include "VectorHUD.h"
+
+#include "Combat/VectorActionLockComponent.h"
+#include "Combat/VectorGravityHookComponent.h"
+#include "Combat/VectorHealthComponent.h"
+#include "Combat/VectorTestDummy.h"
+#include "Engine/Canvas.h"
+#include "Engine/Engine.h"
+#include "EngineUtils.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
+#include "Physics/VectorPhysicsModifierComponent.h"
+#include "VectorCharacter.h"
+
+void AVectorHUD::DrawHUD()
+{
+	Super::DrawHUD();
+	if (!Canvas || !PlayerOwner)
+	{
+		return;
+	}
+
+	if (APawn* PlayerPawn = PlayerOwner->GetPawn())
+	{
+		if (const UVectorHealthComponent* Health =
+			PlayerPawn->FindComponentByClass<UVectorHealthComponent>())
+		{
+			DrawHealthBar(
+				40.0f,
+				Canvas->ClipY - 72.0f,
+				360.0f,
+				26.0f,
+				Health->GetHealth(),
+				Health->GetMaxHealth(),
+				TEXT("PLAYER"),
+				true);
+		}
+		if (GEngine)
+		{
+			if (const AVectorCharacter* VectorCharacter = Cast<AVectorCharacter>(PlayerPawn))
+			{
+				static const TCHAR* EquipmentLabels[] =
+				{
+					TEXT("1 HAMMER"),
+					TEXT("2 CABLE"),
+					TEXT("3 LUBE"),
+					TEXT("4 FLOAT"),
+					TEXT("5 LIFT"),
+				};
+				constexpr float SlotWidth = 72.0f;
+				constexpr float SlotHeight = 30.0f;
+				constexpr float SlotGap = 5.0f;
+				constexpr int32 SlotCount = UE_ARRAY_COUNT(EquipmentLabels);
+				const float BarWidth = SlotCount * SlotWidth + (SlotCount - 1) * SlotGap;
+				const float BarX = (Canvas->ClipX - BarWidth) * 0.5f;
+				const float BarY = Canvas->ClipY - 70.0f;
+				const int32 SelectedIndex = static_cast<int32>(
+					VectorCharacter->GetSelectedEquipmentSlot());
+				for (int32 Index = 0; Index < SlotCount; ++Index)
+				{
+					const float SlotX = BarX + Index * (SlotWidth + SlotGap);
+					const bool bSelected = Index == SelectedIndex;
+					DrawRect(
+						bSelected ? FLinearColor(0.1f, 0.95f, 1.0f, 0.95f)
+							: FLinearColor(0.15f, 0.18f, 0.22f, 0.8f),
+						SlotX - 2.0f, BarY - 2.0f, SlotWidth + 4.0f, SlotHeight + 4.0f);
+					DrawRect(FLinearColor(0.02f, 0.03f, 0.05f, 0.9f),
+						SlotX, BarY, SlotWidth, SlotHeight);
+					DrawText(EquipmentLabels[Index],
+						bSelected ? FLinearColor::White : FLinearColor(0.65f, 0.7f, 0.78f),
+						SlotX + 7.0f, BarY + 8.0f,
+						GEngine->GetSmallFont(), 0.65f, false);
+				}
+			}
+			DrawText(
+				TEXT("1 Hammer  2 Cable  3 Lube  4 Float  5 Lift  |  LMB Use  |  RMB Drag Camera"),
+				FLinearColor(0.85f, 0.9f, 1.0f),
+				40.0f,
+				Canvas->ClipY - 102.0f,
+				GEngine->GetSmallFont(),
+				0.85f,
+				false);
+			if (const AVectorCharacter* VectorCharacter = Cast<AVectorCharacter>(PlayerPawn))
+			{
+				DrawText(
+					FString::Printf(TEXT("EQUIP: %s"), *VectorCharacter->GetSelectedEquipmentLabel()),
+					FLinearColor(0.25f, 0.95f, 1.0f),
+					40.0f,
+					Canvas->ClipY - 124.0f,
+					GEngine->GetSmallFont(),
+					0.85f,
+					false);
+			}
+			if (const UVectorActionLockComponent* Lock =
+				PlayerPawn->FindComponentByClass<UVectorActionLockComponent>(); Lock && Lock->IsLocked())
+			{
+				DrawText(
+					FString::Printf(TEXT("ACTION: %s"), *Lock->GetActiveActionName().ToString()),
+					FLinearColor::Yellow,
+					40.0f,
+					Canvas->ClipY - 146.0f,
+					GEngine->GetSmallFont(),
+					0.85f,
+					false);
+			}
+			if (const UVectorGravityHookComponent* Cable =
+				PlayerPawn->FindComponentByClass<UVectorGravityHookComponent>())
+			{
+				FString CableStatus;
+				if (Cable->IsHookActive())
+				{
+					switch (Cable->GetHookMode())
+					{
+					case EVectorGravityHookMode::AwaitingSecondEndpoint:
+						CableStatus = TEXT("CABLE: SELECT SECOND MONSTER");
+						break;
+					case EVectorGravityHookMode::PullingPlayerToAnchor:
+						CableStatus = TEXT("CABLE: WALL REEL");
+						break;
+					case EVectorGravityHookMode::RetractingPair:
+						if (Cable->GetPairSwingSecondsRemaining() > 0.0)
+						{
+							CableStatus = FString::Printf(TEXT("CABLE: WIDE SWING  %.1fs"),
+								Cable->GetPairSwingSecondsRemaining());
+						}
+						else if (Cable->GetPairSetupSecondsRemaining() > 0.0)
+						{
+							CableStatus = FString::Printf(TEXT("CABLE: HAMMER NOW  %.1fs"),
+								Cable->GetPairSetupSecondsRemaining());
+						}
+						else
+						{
+							CableStatus = TEXT("CABLE: PAIR WINCHING");
+						}
+						break;
+					default:
+						break;
+					}
+				}
+				else if (Cable->IsOnCooldown())
+				{
+					CableStatus = FString::Printf(
+						TEXT("CABLE CD: %.1fs"), Cable->GetCooldownSecondsRemaining());
+				}
+				if (!CableStatus.IsEmpty())
+				{
+					DrawText(CableStatus, FLinearColor(0.95f, 0.25f, 0.95f),
+						40.0f, Canvas->ClipY - 168.0f,
+						GEngine->GetSmallFont(), 0.85f, false);
+				}
+			}
+			if (const UVectorPhysicsModifierComponent* Modifier =
+				PlayerPawn->FindComponentByClass<UVectorPhysicsModifierComponent>();
+				Modifier && Modifier->IsEnvironmentFrictionModified())
+			{
+				DrawText(
+					TEXT("SURFACE: LOW FRICTION"),
+					FLinearColor(0.15f, 0.9f, 1.0f),
+					40.0f,
+					Canvas->ClipY - 190.0f,
+					GEngine->GetSmallFont(),
+					0.85f,
+					false);
+			}
+		}
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// VectorEnemy derives from VectorTestDummy. Iterating the shared base keeps
+	// health/modifier feedback visible on both live enemies and inert test rigs.
+	for (TActorIterator<AVectorTestDummy> It(World); It; ++It)
+	{
+		const AVectorTestDummy* Target = *It;
+		const UVectorHealthComponent* Health = Target
+			? Target->FindComponentByClass<UVectorHealthComponent>()
+			: nullptr;
+		if (!Target || !Health || Health->IsDead())
+		{
+			continue;
+		}
+
+		FVector BoundsOrigin;
+		FVector BoundsExtent;
+		Target->GetActorBounds(true, BoundsOrigin, BoundsExtent);
+		FVector2D ScreenPosition;
+		const FVector BarWorldLocation = BoundsOrigin + FVector(0.0, 0.0, BoundsExtent.Z + 45.0);
+		if (!PlayerOwner->ProjectWorldLocationToScreen(BarWorldLocation, ScreenPosition, true))
+		{
+			continue;
+		}
+
+		constexpr float BarWidth = 82.0f;
+		constexpr float BarHeight = 8.0f;
+		DrawHealthBar(
+			ScreenPosition.X - BarWidth * 0.5f,
+			ScreenPosition.Y,
+			BarWidth,
+			BarHeight,
+			Health->GetHealth(),
+			Health->GetMaxHealth(),
+			FString(),
+			false);
+
+		// 调质器状态徽标：无需额外 UMG 资产，蓝=LUBE、青=FLOAT，并显示剩余秒数。
+		if (const UVectorPhysicsModifierComponent* Modifier =
+			GEngine ? Target->FindComponentByClass<UVectorPhysicsModifierComponent>() : nullptr)
+		{
+			float BadgeX = ScreenPosition.X - BarWidth * 0.5f;
+			const float BadgeY = ScreenPosition.Y + BarHeight + 5.0f;
+			if (Modifier->IsLubricated())
+			{
+				const FString Text = FString::Printf(TEXT("LUBE %.1f"), Modifier->GetLubricantSecondsRemaining());
+				DrawText(Text, FLinearColor(0.2f, 0.45f, 1.0f), BadgeX, BadgeY,
+					GEngine->GetSmallFont(), 0.65f, false);
+				BadgeX += 54.0f;
+			}
+			if (Modifier->IsBuoyant())
+			{
+				const FString Text = FString::Printf(TEXT("FLOAT %.1f"), Modifier->GetBuoyantSecondsRemaining());
+				DrawText(Text, FLinearColor(0.2f, 0.95f, 1.0f), BadgeX, BadgeY,
+					GEngine->GetSmallFont(), 0.65f, false);
+			}
+		}
+	}
+}
+
+void AVectorHUD::DrawHealthBar(
+	const float X,
+	const float Y,
+	const float Width,
+	const float Height,
+	const double CurrentHealth,
+	const double MaximumHealth,
+	const FString& Label,
+	const bool bDrawText)
+{
+	const double SafeMaximum = FMath::Max(1.0, MaximumHealth);
+	const float Ratio = static_cast<float>(FMath::Clamp(CurrentHealth / SafeMaximum, 0.0, 1.0));
+	const FLinearColor FillColor = FLinearColor::LerpUsingHSV(
+		FLinearColor(0.85f, 0.08f, 0.05f, 1.0f),
+		FLinearColor(0.05f, 0.8f, 0.15f, 1.0f),
+		Ratio);
+
+	DrawRect(FLinearColor(0.02f, 0.02f, 0.02f, 0.90f), X - 2.0f, Y - 2.0f, Width + 4.0f, Height + 4.0f);
+	DrawRect(FLinearColor(0.18f, 0.03f, 0.03f, 0.95f), X, Y, Width, Height);
+	DrawRect(FillColor, X, Y, Width * Ratio, Height);
+
+	if (bDrawText && GEngine)
+	{
+		const FString Text = FString::Printf(
+			TEXT("%s  %.0f / %.0f"),
+			*Label,
+			FMath::Max(0.0, CurrentHealth),
+			SafeMaximum);
+		DrawText(Text, FLinearColor::White, X + 8.0f, Y + 3.0f, GEngine->GetSmallFont(), 1.0f, false);
+	}
+}

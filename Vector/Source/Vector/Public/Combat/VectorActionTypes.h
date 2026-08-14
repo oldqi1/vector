@@ -67,6 +67,10 @@ struct VECTOR_API FVectorActionTimeline
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vector|Action", meta = (ClampMin = "0.0", Units = "s"))
 	double MaxChargeSeconds = 0.80;
 
+	/** Active 是否由输入释放结束；引力钩等持续装备设为 true。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Vector|Action")
+	bool bActiveUntilReleased = false;
+
 	/**
 	 * 发起蓄力：仅 Idle 可进入 Windup；重复调用返回 false 且无副作用。
 	 */
@@ -92,8 +96,36 @@ struct VECTOR_API FVectorActionTimeline
 			return false;
 		}
 		Phase = EVectorActionPhase::Active;
-		ActiveSecondsRemaining = FMath::Max(0.0, ActiveSeconds);
+		ActiveSecondsRemaining = FMath::IsFinite(ActiveSeconds)
+			? FMath::Max(0.0, ActiveSeconds) : 0.0;
 		ChargeProgress = FMath::Clamp(ChargeProgress, 0.0, 1.0);
+		return true;
+	}
+
+	/** 从 Idle 直接进入 Active；用于没有蓄力阶段的持续装备。 */
+	bool TryStartActive()
+	{
+		if (Phase != EVectorActionPhase::Idle)
+		{
+			return false;
+		}
+		Phase = EVectorActionPhase::Active;
+		ChargeProgress = 1.0;
+		ActiveSecondsRemaining = bActiveUntilReleased || !FMath::IsFinite(ActiveSeconds)
+			? 0.0 : FMath::Max(0.0, ActiveSeconds);
+		return true;
+	}
+
+	/** 输入维持型 Active 主动结束并进入 Recovery。 */
+	bool TryEndActive()
+	{
+		if (Phase != EVectorActionPhase::Active || !bActiveUntilReleased)
+		{
+			return false;
+		}
+		Phase = EVectorActionPhase::Recovery;
+		RecoverySecondsRemaining = FMath::IsFinite(RecoverySeconds)
+			? FMath::Max(0.0, RecoverySeconds) : 0.0;
 		return true;
 	}
 
@@ -122,27 +154,46 @@ struct VECTOR_API FVectorActionTimeline
 
 		if (Phase == EVectorActionPhase::Windup)
 		{
+			const double SafeMaxChargeSeconds = FMath::IsFinite(MaxChargeSeconds)
+				? FMath::Max(UE_SMALL_NUMBER, MaxChargeSeconds)
+				: UE_SMALL_NUMBER;
 			ChargeProgress = FMath::Clamp(
-				ChargeProgress + DeltaSeconds / FMath::Max(UE_SMALL_NUMBER, MaxChargeSeconds),
+				ChargeProgress + DeltaSeconds / SafeMaxChargeSeconds,
 				0.0,
 				1.0);
+			return;
 		}
-		else if (Phase == EVectorActionPhase::Active)
+		if (Phase == EVectorActionPhase::Active && bActiveUntilReleased)
 		{
-			ActiveSecondsRemaining -= DeltaSeconds;
-			if (ActiveSecondsRemaining <= 0.0)
-			{
-				Phase = EVectorActionPhase::Recovery;
-				RecoverySecondsRemaining = FMath::Max(0.0, RecoverySeconds);
-			}
+			return;
 		}
-		else if (Phase == EVectorActionPhase::Recovery)
+
+		double RemainingDeltaSeconds = DeltaSeconds;
+		if (Phase == EVectorActionPhase::Active)
 		{
-			RecoverySecondsRemaining -= DeltaSeconds;
-			if (RecoverySecondsRemaining <= 0.0)
+			const double SafeActiveRemaining = FMath::Max(0.0, ActiveSecondsRemaining);
+			if (RemainingDeltaSeconds < SafeActiveRemaining)
 			{
-				Phase = EVectorActionPhase::Idle;
+				ActiveSecondsRemaining = SafeActiveRemaining - RemainingDeltaSeconds;
+				return;
 			}
+			RemainingDeltaSeconds -= SafeActiveRemaining;
+			Phase = EVectorActionPhase::Recovery;
+			ActiveSecondsRemaining = 0.0;
+			RecoverySecondsRemaining = FMath::IsFinite(RecoverySeconds)
+				? FMath::Max(0.0, RecoverySeconds) : 0.0;
+		}
+
+		if (Phase == EVectorActionPhase::Recovery)
+		{
+			RecoverySecondsRemaining -= RemainingDeltaSeconds;
+			if (RecoverySecondsRemaining > 0.0)
+			{
+				return;
+			}
+			Phase = EVectorActionPhase::Idle;
+			RecoverySecondsRemaining = 0.0;
+			ChargeProgress = 0.0;
 		}
 	}
 

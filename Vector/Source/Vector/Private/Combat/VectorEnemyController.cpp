@@ -40,6 +40,10 @@ void AVectorEnemyController::OnPossess(APawn* InPawn)
 void AVectorEnemyController::OnUnPossess()
 {
 	// 清理缓存防悬垂（Pawn 被销毁时 UnPossess 触发）。
+	if (ControlledEnemy)
+	{
+		ControlledEnemy->SetAttackWarningPresentation(false);
+	}
 	ControlledEnemy = nullptr;
 	Super::OnUnPossess();
 }
@@ -60,16 +64,30 @@ void AVectorEnemyController::Tick(const float DeltaSeconds)
 	{
 		if (ChargeWarmupRemainingSeconds > 0.0)
 		{
+			// 前摇尚未发射时仍可被锤击/牵引打断；发射后的冲锋本身会进入
+			// impulse-driven，不能用同一条件把自己的冲锋立即取消。
+			if (ControlledEnemy->ShouldPauseAI())
+			{
+				ControlledEnemy->SetAttackWarningPresentation(false);
+				bCharging = false;
+				ChargeWarmupRemainingSeconds = 0.0;
+				ChargeActiveRemainingSeconds = 0.0;
+				ChargeCooldownRemainingSeconds = 1.0;
+				UE_LOG(LogVectorEnemyAI, Log, TEXT("Charger %s warmup interrupted by physical state"),
+					*ControlledEnemy->GetName());
+				return;
+			}
 			ChargeWarmupRemainingSeconds -= DeltaSeconds;
 			// 预警期间原地停：暂停路径跟随（禁用 StopMovement——会清冲量）。
 			PausePathFollowing();
 			if (ChargeWarmupRemainingSeconds <= 0.0)
 			{
 				// 预警结束：锁定方向并施加高速冲量。
+				ControlledEnemy->SetAttackWarningPresentation(false);
 				ChargeDirection = ChargeDirection.GetSafeNormal();
 				if (UVectorCharacterMovementComponent* Movement = ControlledEnemy->FindComponentByClass<UVectorCharacterMovementComponent>())
 				{
-					Movement->QueueWorldVelocityChange(ChargeDirection * ChargeSpeedCmPerSecond);
+					Movement->QueueDirectionalVelocityOverride(ChargeDirection, ChargeSpeedCmPerSecond);
 					UE_LOG(LogVectorEnemyAI, Log, TEXT("Charger %s launches at %.0f cm/s along %s"),
 						*ControlledEnemy->GetName(), ChargeSpeedCmPerSecond, *ChargeDirection.ToCompactString());
 				}
@@ -83,6 +101,7 @@ void AVectorEnemyController::Tick(const float DeltaSeconds)
 			PausePathFollowing();
 			if (ChargeActiveRemainingSeconds <= 0.0)
 			{
+				ControlledEnemy->SetAttackWarningPresentation(false);
 				bCharging = false;
 				ChargeCooldownRemainingSeconds = ChargeCooldownSeconds;
 				UE_LOG(LogVectorEnemyAI, Log, TEXT("Charger %s charge finished"), *ControlledEnemy->GetName());
@@ -100,6 +119,7 @@ void AVectorEnemyController::Tick(const float DeltaSeconds)
 	if (ControlledEnemy->Archetype == EVectorEnemyArchetype::ChargerRammer
 		&& ChargeCooldownRemainingSeconds <= 0.0
 		&& PlayerPawn
+		&& !ControlledEnemy->ShouldPauseAI()
 		&& FVector::Dist2D(ControlledEnemy->GetActorLocation(), PlayerPawn->GetActorLocation()) <= ChargeTriggerRangeCm)
 	{
 		TriggerCharge();
@@ -135,6 +155,7 @@ void AVectorEnemyController::TriggerCharge()
 	ChargeDirection = (PlayerPawn->GetActorLocation() - ControlledEnemy->GetActorLocation()).GetSafeNormal2D();
 	ChargeWarmupRemainingSeconds = ChargeWarmupSeconds;
 	bCharging = true;
+	ControlledEnemy->SetAttackWarningPresentation(true);
 	UE_LOG(LogVectorEnemyAI, Log, TEXT("Charger %s warmup started toward %s"),
 		*ControlledEnemy->GetName(), *PlayerPawn->GetName());
 }

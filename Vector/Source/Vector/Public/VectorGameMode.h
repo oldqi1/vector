@@ -9,8 +9,8 @@
 /**
  * 冲量荒原原型默认 GameMode。
  *
- * 只负责装配默认 Pawn 与 PlayerController，不含玩法逻辑；
- * 稳定/失衡/施力等规则由专属组件在后续 Story 落地。
+ * 负责装配默认 Pawn/PlayerController，并持有击杀归因账本（P0：验收 #6 硬证据）：
+ * PIE 结束（EndPlay）时输出本局击杀来源汇总与单一来源报警。
  */
 UCLASS()
 class VECTOR_API AVectorGameMode : public AGameModeBase
@@ -19,4 +19,11 @@ class VECTOR_API AVectorGameMode : public AGameModeBase
 
 public:
 	AVectorGameMode();
+
+	/** 击杀归因账本（死亡检查点监控；局末 LogSummary 自动输出）。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|KillAttribution")
+	TObjectPtr<class UVectorKillAttributionComponent> KillAttribution;
+
+protected:
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 };

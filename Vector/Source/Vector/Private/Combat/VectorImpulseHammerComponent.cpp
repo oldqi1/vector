@@ -2,14 +2,16 @@
 
 #include "Combat/VectorImpulseHammerComponent.h"
 
+#include "Combat/VectorActionLockComponent.h"
+#include "Combat/VectorCombatTargeting.h"
+#include "Combat/VectorEnemy.h"
 #include "Combat/VectorHealthComponent.h"
+#include "Combat/VectorKillAttributionComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
-#include "GameFramework/Controller.h"
-#include "GameFramework/Pawn.h"
+#include "GameFramework/GameModeBase.h"
 #include "Gameplay/VectorCharacterMovementComponent.h"
-#include "Math/RotationMatrix.h"
 #include "Stability/VectorStabilityComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVectorCombat, Log, All);
@@ -27,6 +29,17 @@ namespace
 		default: return TEXT("Unknown");
 		}
 	}
+
+	/** 世界级击杀归因账本（GameMode 持有；无则返回 nullptr，不影响玩法）。 */
+	UVectorKillAttributionComponent* FindKillAttribution(const UWorld* World)
+	{
+		if (!World)
+		{
+			return nullptr;
+		}
+		const AGameModeBase* GameMode = World->GetAuthGameMode();
+		return GameMode ? GameMode->FindComponentByClass<UVectorKillAttributionComponent>() : nullptr;
+	}
 }
 
 UVectorImpulseHammerComponent::UVectorImpulseHammerComponent()
@@ -42,7 +55,12 @@ void UVectorImpulseHammerComponent::TickComponent(
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	const EVectorActionPhase PreviousPhase = Timeline.Phase;
 	Timeline.Advance(DeltaTime);
+	if (PreviousPhase != EVectorActionPhase::Idle && Timeline.Phase == EVectorActionPhase::Idle)
+	{
+		ReleaseActionLock();
+	}
 
 	// 蓄力期可视化：施力方向 + 进度（灰盒可读性，bDrawChargeDebug 可关）。
 	if (bDrawChargeDebug && IsCharging())
@@ -93,12 +111,45 @@ void UVectorImpulseHammerComponent::TickComponent(
 	}
 }
 
+void UVectorImpulseHammerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	CancelAction();
+	Super::EndPlay(EndPlayReason);
+}
+
 void UVectorImpulseHammerComponent::StartCharge()
 {
+	if (Timeline.IsBusy())
+	{
+		UE_LOG(LogVectorCombat, Log, TEXT("Hammer StartCharge -> REJECTED (own Phase=%s)"),
+			GetPhaseLabel(Timeline.Phase));
+		return;
+	}
+	if (UVectorActionLockComponent* Lock = GetOwner()
+		? GetOwner()->FindComponentByClass<UVectorActionLockComponent>() : nullptr)
+	{
+		if (!Lock->TryAcquire(this, TEXT("ImpulseHammer")))
+		{
+			UE_LOG(LogVectorCombat, Log, TEXT("Hammer StartCharge -> REJECTED (action lock=%s)"),
+				*Lock->GetActiveActionName().ToString());
+			return;
+		}
+		bOwnsActionLock = true;
+	}
 	const bool bStarted = Timeline.TryStartWindup();
+	if (!bStarted)
+	{
+		ReleaseActionLock();
+	}
 	UE_LOG(LogVectorCombat, Log, TEXT("Hammer StartCharge -> %s (Phase=%s)"),
 		bStarted ? TEXT("OK") : TEXT("REJECTED"),
 		GetPhaseLabel(Timeline.Phase));
+}
+
+void UVectorImpulseHammerComponent::CancelAction()
+{
+	Timeline.Reset();
+	ReleaseActionLock();
 }
 
 void UVectorImpulseHammerComponent::ReleaseCharge()
@@ -117,26 +168,7 @@ void UVectorImpulseHammerComponent::ReleaseCharge()
 
 FVector UVectorImpulseHammerComponent::ComputeStrikeDirection() const
 {
-	// 俯视角"鼠标地面瞄准"：施力方向 = 镜头（控制器）Yaw 的水平前向。
-	// 注意不能用 Actor 朝向——角色 Yaw 跟随移动方向，与瞄准无关。
-	const AActor* Owner = GetOwner();
-	if (!Owner)
-	{
-		return FVector::ForwardVector;
-	}
-
-	FRotator ControlRotation = Owner->GetActorRotation();
-	if (const APawn* Pawn = Cast<APawn>(Owner))
-	{
-		if (const AController* Controller = Pawn->GetController())
-		{
-			ControlRotation = Controller->GetControlRotation();
-		}
-	}
-
-	const FRotator HorizontalYaw(0.0, ControlRotation.Yaw, 0.0);
-	const FVector Direction = FRotationMatrix(HorizontalYaw).GetUnitAxis(EAxis::X);
-	return Direction.IsNearlyZero() ? FVector::ForwardVector : Direction;
+	return FVectorCombatTargeting::ComputeCursorGroundAimDirection(GetOwner());
 }
 
 void UVectorImpulseHammerComponent::ApplyImpulseToHitActors(const FVector& Direction)
@@ -171,6 +203,11 @@ void UVectorImpulseHammerComponent::ApplyImpulseToHitActors(const FVector& Direc
 	{
 		AActor* HitActor = Hit.GetActor();
 		if (!HitActor || HitActor == Owner)
+		{
+			continue;
+		}
+		if (const UVectorHealthComponent* Health =
+			HitActor->FindComponentByClass<UVectorHealthComponent>(); Health && Health->IsDead())
 		{
 			continue;
 		}
@@ -210,7 +247,21 @@ void UVectorImpulseHammerComponent::ApplyImpulseToHitActors(const FVector& Direc
 	if (UVectorHealthComponent* Health = BestTarget->FindComponentByClass<UVectorHealthComponent>())
 	{
 		const double HealthDamage = BaseHealthDamage * Charge;
+		if (HealthDamage >= Health->GetHealth())
+		{
+			if (AVectorEnemy* Enemy = Cast<AVectorEnemy>(BestTarget))
+			{
+				Enemy->PrepareForHammerLethalLaunch();
+			}
+		}
 		const bool bKilled = Health->ApplyDamage(HealthDamage);
+		if (bKilled)
+		{
+			if (UVectorKillAttributionComponent* Attribution = FindKillAttribution(GetWorld()))
+			{
+				Attribution->RecordKill(EVectorKillCause::Hammer);
+			}
+		}
 		UE_LOG(LogVectorCombat, Log, TEXT("Hammer hit %s: health damage=%.1f killed=%s"),
 			*BestTarget->GetName(),
 			HealthDamage,
@@ -224,17 +275,15 @@ void UVectorImpulseHammerComponent::ApplyImpulseToHitActors(const FVector& Direc
 	{
 		const UVectorStabilityComponent* Stability = BestTarget->FindComponentByClass<UVectorStabilityComponent>();
 		const bool bStaggered = Stability && Stability->IsStaggered();
-		const double MassValue = Stability
-			? GetMassValue(Stability->GetMassClass(), bStaggered)
-			: MassValueMedium;
-		const double DeltaVelocity = ImpulseSpeedCmPerSecond * Charge
+		const double MassValue = Stability ? Stability->GetEffectivePhysicalMass() : 2.5;
+		const double TargetSpeed = ImpulseSpeedCmPerSecond * Charge
 			/ FMath::Max(UE_SMALL_NUMBER, MassValue);
-		if (DeltaVelocity > 1.0)
+		if (TargetSpeed > 1.0)
 		{
-			const bool bQueued = Movement->QueueWorldVelocityChange(Direction * DeltaVelocity);
-			UE_LOG(LogVectorCombat, Log, TEXT("Hammer impulse -> %s dv=%.0f cm/s (I=%.0f, mass=%.2f, staggered=%s) charge=%.2f queued=%s"),
+			const bool bQueued = Movement->QueueDirectionalVelocityOverride(Direction, TargetSpeed);
+			UE_LOG(LogVectorCombat, Log, TEXT("Hammer impulse -> %s targetSpeed=%.0f cm/s (I=%.0f, mass=%.2f, staggered=%s) charge=%.2f queued=%s"),
 				*BestTarget->GetName(),
-				DeltaVelocity,
+				TargetSpeed,
 				ImpulseSpeedCmPerSecond * Charge,
 				MassValue,
 				bStaggered ? TEXT("YES") : TEXT("no"),
@@ -243,37 +292,8 @@ void UVectorImpulseHammerComponent::ApplyImpulseToHitActors(const FVector& Direc
 		}
 		else
 		{
-			UE_LOG(LogVectorCombat, Log, TEXT("Hammer impulse skipped (dv=%.1f too low)"), DeltaVelocity);
+			UE_LOG(LogVectorCombat, Log, TEXT("Hammer impulse skipped (targetSpeed=%.1f too low)"), TargetSpeed);
 		}
-	}
-}
-
-double UVectorImpulseHammerComponent::GetMassValue(const EVectorMassClass MassClass, const bool bStaggered) const
-{
-	// 失衡（脱锚）时有效质量大幅下降：重型 5.0 → 2.0，成为可用的"炮弹"。
-	if (bStaggered)
-	{
-		switch (MassClass)
-		{
-		case EVectorMassClass::Light:
-			return StaggeredMassLight;
-		case EVectorMassClass::Heavy:
-			return StaggeredMassHeavy;
-		case EVectorMassClass::Medium:
-		default:
-			return StaggeredMassMedium;
-		}
-	}
-
-	switch (MassClass)
-	{
-	case EVectorMassClass::Light:
-		return MassValueLight;
-	case EVectorMassClass::Heavy:
-		return MassValueHeavy;
-	case EVectorMassClass::Medium:
-	default:
-		return MassValueMedium;
 	}
 }
 
@@ -282,4 +302,18 @@ FLinearColor UVectorImpulseHammerComponent::ComputeChargeDebugColor() const
 	// 蓄力进度 0~1：绿 → 黄 → 红，力度一眼可读。
 	const double Progress = FMath::Clamp(Timeline.ChargeProgress, 0.0, 1.0);
 	return FLinearColor::LerpUsingHSV(FLinearColor::Green, FLinearColor::Red, Progress);
+}
+
+void UVectorImpulseHammerComponent::ReleaseActionLock()
+{
+	if (!bOwnsActionLock)
+	{
+		return;
+	}
+	if (UVectorActionLockComponent* Lock = GetOwner()
+		? GetOwner()->FindComponentByClass<UVectorActionLockComponent>() : nullptr)
+	{
+		Lock->Release(this);
+	}
+	bOwnsActionLock = false;
 }

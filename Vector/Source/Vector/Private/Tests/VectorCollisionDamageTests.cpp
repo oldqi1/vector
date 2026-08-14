@@ -88,4 +88,87 @@ bool FVectorCollisionDamageCapTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FVectorCollisionEqualMassConservationTest,
+	"Vector.Impact.CollisionSolve.EqualMassConservation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FVectorCollisionEqualMassConservationTest::RunTest(const FString& Parameters)
+{
+	double StrikerAfter = 0.0;
+	double TargetAfter = 0.0;
+	TestTrue(TEXT("Valid equal-mass collision"), FVectorImpactMath::SolveOneDimensionalCollision(
+		1400.0, 0.0, 1.25, 1.25, 0.7, StrikerAfter, TargetAfter));
+	TestEqual(TEXT("Striker keeps 15% forward speed"), StrikerAfter, 210.0, 1.e-6);
+	TestEqual(TEXT("Target receives 85% forward speed"), TargetAfter, 1190.0, 1.e-6);
+
+	const double MomentumBefore = 1.25 * 1400.0;
+	const double MomentumAfter = 1.25 * StrikerAfter + 1.25 * TargetAfter;
+	const double EnergyBefore = 0.5 * 1.25 * FMath::Square(1400.0);
+	const double EnergyAfter = 0.5 * 1.25 * FMath::Square(StrikerAfter)
+		+ 0.5 * 1.25 * FMath::Square(TargetAfter);
+	TestEqual(TEXT("Momentum conserved"), MomentumAfter, MomentumBefore, 1.e-6);
+	TestTrue(TEXT("Restitution below one cannot add energy"), EnergyAfter <= EnergyBefore + 1.e-6);
+	TestTrue(TEXT("Striker does not reverse at high speed"), StrikerAfter >= 0.0);
+	TestEqual(TEXT("Solved pair is separating, so duplicate contact adds no second impulse"),
+		FVectorImpactMath::ComputePlanarClosingSpeed(
+			FVector(StrikerAfter, 0.0, 0.0),
+			FVector(TargetAfter, 0.0, 0.0),
+			FVector::ForwardVector),
+		0.0,
+		1.e-6);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FVectorCollisionMassAndClosingSpeedTest,
+	"Vector.Impact.CollisionSolve.MassAndClosingSpeed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FVectorCollisionMassAndClosingSpeedTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("Same-direction target subtracts from closing speed"),
+		FVectorImpactMath::ComputePlanarClosingSpeed(
+			FVector(1000.0, 0.0, 0.0),
+			FVector(800.0, 0.0, 0.0),
+			FVector::ForwardVector),
+		200.0,
+		1.e-6);
+	TestEqual(TEXT("Separating pair has zero closing speed"),
+		FVectorImpactMath::ComputePlanarClosingSpeed(
+			FVector(100.0, 0.0, 0.0),
+			FVector(800.0, 0.0, 0.0),
+			FVector::ForwardVector),
+		0.0,
+		1.e-6);
+
+	double HeavyAfter = 0.0;
+	double LightAfter = 0.0;
+	TestTrue(TEXT("Valid heavy-to-light collision"), FVectorImpactMath::SolveOneDimensionalCollision(
+		1000.0, 0.0, 5.0, 1.25, 0.7, HeavyAfter, LightAfter));
+	TestTrue(TEXT("Heavy striker keeps moving forward"), HeavyAfter > 0.0);
+	TestTrue(TEXT("Light target may physically exceed striker input speed"), LightAfter > 1000.0);
+	const double EnergyBefore = 0.5 * 5.0 * FMath::Square(1000.0);
+	const double EnergyAfter = 0.5 * 5.0 * FMath::Square(HeavyAfter)
+		+ 0.5 * 1.25 * FMath::Square(LightAfter);
+	TestTrue(TEXT("Heavy-to-light collision still does not add total energy"), EnergyAfter <= EnergyBefore + 1.e-6);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FVectorCollisionInvalidInputTest,
+	"Vector.Impact.CollisionSolve.InvalidInput",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FVectorCollisionInvalidInputTest::RunTest(const FString& Parameters)
+{
+	double StrikerAfter = 123.0;
+	double TargetAfter = 456.0;
+	TestFalse(TEXT("Zero mass rejected"), FVectorImpactMath::SolveOneDimensionalCollision(
+		1000.0, 0.0, 0.0, 1.0, 0.7, StrikerAfter, TargetAfter));
+	TestEqual(TEXT("Rejected solve clears striker output"), StrikerAfter, 0.0, 1.e-6);
+	TestEqual(TEXT("Rejected solve clears target output"), TargetAfter, 0.0, 1.e-6);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

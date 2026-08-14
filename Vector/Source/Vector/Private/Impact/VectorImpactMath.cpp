@@ -19,6 +19,81 @@ namespace VectorImpactMathInternal
 	}
 }
 
+double FVectorImpactMath::ComputeMassAdjustedSpeed(
+	const double BaseSpeedCmPerSecond,
+	const double EffectiveMass)
+{
+	if (!FMath::IsFinite(BaseSpeedCmPerSecond) || !FMath::IsFinite(EffectiveMass)
+		|| BaseSpeedCmPerSecond <= 0.0 || EffectiveMass <= 0.0)
+	{
+		return 0.0;
+	}
+	return BaseSpeedCmPerSecond / FMath::Max(0.1, EffectiveMass);
+}
+
+double FVectorImpactMath::ComputePlanarClosingSpeed(
+	const FVector& StrikerVelocity,
+	const FVector& TargetVelocity,
+	const FVector& Direction)
+{
+	using namespace VectorImpactMathInternal;
+
+	if (!IsFiniteVector(StrikerVelocity)
+		|| !IsFiniteVector(TargetVelocity)
+		|| !IsFiniteVector(Direction))
+	{
+		return 0.0;
+	}
+
+	const FVector PlanarDirection = FVector::VectorPlaneProject(Direction, FVector::UpVector).GetSafeNormal();
+	if (PlanarDirection.IsNearlyZero())
+	{
+		return 0.0;
+	}
+
+	const FVector RelativeVelocity = FVector::VectorPlaneProject(
+		StrikerVelocity - TargetVelocity,
+		FVector::UpVector);
+	const double ClosingSpeed = FVector::DotProduct(RelativeVelocity, PlanarDirection);
+	return FMath::IsFinite(ClosingSpeed) ? FMath::Max(0.0, ClosingSpeed) : 0.0;
+}
+
+bool FVectorImpactMath::SolveOneDimensionalCollision(
+	const double StrikerSpeed,
+	const double TargetSpeed,
+	const double StrikerMass,
+	const double TargetMass,
+	const double Restitution,
+	double& OutStrikerSpeed,
+	double& OutTargetSpeed)
+{
+	OutStrikerSpeed = 0.0;
+	OutTargetSpeed = 0.0;
+	if (!FMath::IsFinite(StrikerSpeed)
+		|| !FMath::IsFinite(TargetSpeed)
+		|| !FMath::IsFinite(StrikerMass)
+		|| !FMath::IsFinite(TargetMass)
+		|| !FMath::IsFinite(Restitution)
+		|| StrikerMass <= UE_SMALL_NUMBER
+		|| TargetMass <= UE_SMALL_NUMBER)
+	{
+		return false;
+	}
+
+	const double SafeRestitution = FMath::Clamp(Restitution, 0.0, 1.0);
+	const double TotalMass = StrikerMass + TargetMass;
+	OutStrikerSpeed =
+		((StrikerMass - SafeRestitution * TargetMass) * StrikerSpeed
+			+ (1.0 + SafeRestitution) * TargetMass * TargetSpeed)
+		/ TotalMass;
+	OutTargetSpeed =
+		((1.0 + SafeRestitution) * StrikerMass * StrikerSpeed
+			+ (TargetMass - SafeRestitution * StrikerMass) * TargetSpeed)
+		/ TotalMass;
+
+	return FMath::IsFinite(OutStrikerSpeed) && FMath::IsFinite(OutTargetSpeed);
+}
+
 double FVectorImpactMath::ComputeClosingSpeedCmPerSecond(
 	const FVector& PlayerLocation,
 	const FVector& PlayerVelocity,

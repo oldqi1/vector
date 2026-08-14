@@ -21,3 +21,6 @@ ubt_trace_backup/
 # 日志/调试临时
 *.log
 Logs/
+
+# Local collaboration memory
+.workbuddy/

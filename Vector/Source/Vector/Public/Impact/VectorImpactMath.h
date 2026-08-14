@@ -13,6 +13,37 @@
  */
 struct VECTOR_API FVectorImpactMath
 {
+	/** 把速度/冲量强度按统一有效质量换算为目标速度；非法输入返回零。 */
+	static double ComputeMassAdjustedSpeed(double BaseSpeedCmPerSecond, double EffectiveMass);
+
+	/**
+	 * 计算沿给定水平碰撞方向的闭合速度，不设上限。
+	 * Direction 指向“撞击者 → 被撞者”；双方正在分离时返回 0。
+	 */
+	static double ComputePlanarClosingSpeed(
+		const FVector& StrikerVelocity,
+		const FVector& TargetVelocity,
+		const FVector& Direction);
+
+	/**
+	 * 一维双物体碰撞解算（动量守恒 + 恢复系数）。
+	 *
+	 * @param StrikerSpeed 撞击者沿碰撞方向的碰前速度。
+	 * @param TargetSpeed 被撞者沿碰撞方向的碰前速度。
+	 * @param StrikerMass 撞击者有效质量，必须 > 0。
+	 * @param TargetMass 被撞者有效质量，必须 > 0。
+	 * @param Restitution 恢复系数 [0,1]；0 完全非弹性，1 完全弹性。
+	 * @return 输入有效时返回 true，并写出双方碰后速度；无效输入返回 false。
+	 */
+	static bool SolveOneDimensionalCollision(
+		double StrikerSpeed,
+		double TargetSpeed,
+		double StrikerMass,
+		double TargetMass,
+		double Restitution,
+		double& OutStrikerSpeed,
+		double& OutTargetSpeed);
+
 	/**
 	 * 计算正向水平闭合速度，单位为 cm/s，截断到 [0, 300]。
 	 *
@@ -44,7 +75,7 @@ struct VECTOR_API FVectorImpactMath
 	 * 零处理；结果 clamp 到 [0, MaxDamage]，防止一次碰撞数值溢出。
 	 *
 	 * @param RelativeSpeedCmPerSecond 相对速度（沿撞击方向的闭合分量），cm/s。
-	 * @param MassMultiplier           被撞目标的质量系数（轻/中/重查表）。
+	 * @param MassMultiplier           撞击者的伤害质量系数（轻/中/重查表）。
 	 * @param CollisionTypeMultiplier  碰撞类型系数（Wall=撞墙 / Body=撞人 / Ground=落地）。
 	 * @param MinDamageSpeedCmPerSecond 产生伤害的最小速度阈值，默认 300 cm/s。
 	 * @param DamagePerSpeed           每 1 cm/s 超速的稳定度伤害，默认 0.05。

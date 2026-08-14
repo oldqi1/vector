@@ -4,7 +4,12 @@
 
 #include "Animation/AnimSequence.h"
 #include "Camera/CameraComponent.h"
+#include "Combat/VectorActionLockComponent.h"
+#include "Combat/VectorGravityHookComponent.h"
+#include "Combat/VectorHealthComponent.h"
 #include "Combat/VectorImpulseHammerComponent.h"
+#include "Combat/VectorLiftForkComponent.h"
+#include "Combat/VectorModifierApplicatorComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -20,13 +25,14 @@
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
+#include "Physics/VectorPhysicsModifierComponent.h"
 #include "UObject/ConstructorHelpers.h"
 
 AVectorCharacter::AVectorCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UVectorCharacterMovementComponent>(
 		ACharacter::CharacterMovementComponentName))
 {
-	// 俯视角移动游戏：角色朝向跟随移动方向（WASD），鼠标只控制镜头 Yaw 与瞄准方向。
+	// 俯视角移动游戏：角色朝向跟随移动方向；鼠标瞄准，中键拖动才控制镜头 Yaw。
 	// 不绑相机 Yaw，否则 WASD 会变成"面朝前的平移"（倒走/侧走），Run 动画与运动方向不一致。
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
@@ -86,13 +92,24 @@ AVectorCharacter::AVectorCharacter(const FObjectInitializer& ObjectInitializer)
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
 
+	// 玩家级动作锁先于装备创建；左右键装备共享它，拒绝同帧速度竞争。
+	ActionLock = CreateDefaultSubobject<UVectorActionLockComponent>(TEXT("ActionLock"));
+
 	// 冲量锤装备（S02）：左键按住蓄力、松开释放水平冲量。
 	ImpulseHammer = CreateDefaultSubobject<UVectorImpulseHammerComponent>(TEXT("ImpulseHammer"));
+	GravityHook = CreateDefaultSubobject<UVectorGravityHookComponent>(TEXT("GravityHook"));
+	ModifierApplicator = CreateDefaultSubobject<UVectorModifierApplicatorComponent>(TEXT("ModifierApplicator"));
+	LiftFork = CreateDefaultSubobject<UVectorLiftForkComponent>(TEXT("LiftFork"));
+
+	// 玩家核心生命（P2 补全）：被敌人撞击/扑击扣血，归零重生。
+	HealthComponent = CreateDefaultSubobject<UVectorHealthComponent>(TEXT("Health"));
+	PhysicsModifierComponent = CreateDefaultSubobject<UVectorPhysicsModifierComponent>(TEXT("PhysicsModifier"));
 }
 
 void AVectorCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	RespawnTransform = GetActorTransform();
 
 	// 固定倾角：只保留 Yaw 作为玩家控制的水平旋转自由度。
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
@@ -112,6 +129,63 @@ void AVectorCharacter::BeginPlay()
 			Subsystem->AddMappingContext(MoveInputMappingContext, 0);
 		}
 	}
+
+	// 玩家生命归零 → 灰盒期重生（复位位置 + 回满血）。
+	if (HealthComponent)
+	{
+		HealthComponent->OnDeath.AddDynamic(this, &AVectorCharacter::HandlePlayerDeath);
+	}
+}
+
+void AVectorCharacter::HandlePlayerDeath()
+{
+	// 灰盒重生：回到实际 PlayerStart + 回满血 + 清冲量（正式期：死亡表现/掉局内资源）。
+	StopJumping();
+	if (HealthComponent)
+	{
+		HealthComponent->ResetHealth();
+	}
+	if (UVectorCharacterMovementComponent* Movement =
+		FindComponentByClass<UVectorCharacterMovementComponent>())
+	{
+		// Clear first so the impulse-preserving StopMovement override takes the
+		// normal hard-stop path. Otherwise the pawn can retain its current launch
+		// velocity and keep sliding/flying after TeleportTo.
+		Movement->ClearQueuedWorldVelocityChanges();
+		Movement->StopMovementImmediately();
+	}
+	if (ImpulseHammer)
+	{
+		ImpulseHammer->CancelAction();
+	}
+	if (GravityHook)
+	{
+		GravityHook->CancelHook();
+	}
+	if (ModifierApplicator)
+	{
+		ModifierApplicator->CancelAction();
+	}
+	if (LiftFork)
+	{
+		LiftFork->CancelAction();
+	}
+	if (ActionLock)
+	{
+		ActionLock->ForceRelease();
+	}
+	const bool bTeleported = TeleportTo(
+		RespawnTransform.GetLocation(), RespawnTransform.Rotator());
+	if (UVectorCharacterMovementComponent* Movement =
+		FindComponentByClass<UVectorCharacterMovementComponent>())
+	{
+		Movement->SetMovementMode(MOVE_Walking);
+	}
+	UE_LOG(LogTemp, Log, TEXT("Player died -> respawn at %s teleported=%s velocity=%s mode=%s"),
+		*RespawnTransform.GetLocation().ToCompactString(),
+		bTeleported ? TEXT("YES") : TEXT("FAILED"),
+		*GetVelocity().ToCompactString(),
+		GetCharacterMovement() ? *GetCharacterMovement()->GetMovementName() : TEXT("(none)"));
 }
 
 void AVectorCharacter::Tick(const float DeltaSeconds)
@@ -130,8 +204,15 @@ void AVectorCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	{
 		EnhancedInput->BindAction(MoveInputAction, ETriggerEvent::Triggered, this, &AVectorCharacter::HandleMoveInput);
 		EnhancedInput->BindAction(LookInputAction, ETriggerEvent::Triggered, this, &AVectorCharacter::HandleLookInput);
+		EnhancedInput->BindAction(CameraRotateInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleCameraRotatePressed);
+		EnhancedInput->BindAction(CameraRotateInputAction, ETriggerEvent::Completed, this, &AVectorCharacter::HandleCameraRotateReleased);
 		EnhancedInput->BindAction(AttackInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleAttackPressed);
 		EnhancedInput->BindAction(AttackInputAction, ETriggerEvent::Completed, this, &AVectorCharacter::HandleAttackReleased);
+		EnhancedInput->BindAction(SelectHammerInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleSelectHammerPressed);
+		EnhancedInput->BindAction(HookInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleHookPressed);
+		EnhancedInput->BindAction(LubricantInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleLubricantPressed);
+		EnhancedInput->BindAction(BuoyantSporeInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleBuoyantSporePressed);
+		EnhancedInput->BindAction(LiftForkInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleLiftForkPressed);
 		EnhancedInput->BindAction(JumpInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleJumpPressed);
 		EnhancedInput->BindAction(JumpInputAction, ETriggerEvent::Completed, this, &AVectorCharacter::HandleJumpReleased);
 		EnhancedInput->BindAction(ZoomInputAction, ETriggerEvent::Triggered, this, &AVectorCharacter::HandleZoomInput);
@@ -140,7 +221,10 @@ void AVectorCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 
 void AVectorCharacter::EnsureRuntimeInput()
 {
-	if (MoveInputAction && LookInputAction && AttackInputAction && JumpInputAction && ZoomInputAction && MoveInputMappingContext)
+	if (MoveInputAction && LookInputAction && CameraRotateInputAction
+		&& AttackInputAction && SelectHammerInputAction && HookInputAction
+		&& LubricantInputAction && BuoyantSporeInputAction && LiftForkInputAction
+		&& JumpInputAction && ZoomInputAction && MoveInputMappingContext)
 	{
 		return;
 	}
@@ -151,8 +235,26 @@ void AVectorCharacter::EnsureRuntimeInput()
 	LookInputAction = NewObject<UInputAction>(this, TEXT("IA_Look"));
 	LookInputAction->ValueType = EInputActionValueType::Axis2D;
 
+	CameraRotateInputAction = NewObject<UInputAction>(this, TEXT("IA_CameraRotate"));
+	CameraRotateInputAction->ValueType = EInputActionValueType::Boolean;
+
 	AttackInputAction = NewObject<UInputAction>(this, TEXT("IA_Attack"));
 	AttackInputAction->ValueType = EInputActionValueType::Boolean;
+
+	SelectHammerInputAction = NewObject<UInputAction>(this, TEXT("IA_SelectHammer"));
+	SelectHammerInputAction->ValueType = EInputActionValueType::Boolean;
+
+	HookInputAction = NewObject<UInputAction>(this, TEXT("IA_SelectCable"));
+	HookInputAction->ValueType = EInputActionValueType::Boolean;
+
+	LubricantInputAction = NewObject<UInputAction>(this, TEXT("IA_Lubricant"));
+	LubricantInputAction->ValueType = EInputActionValueType::Boolean;
+
+	BuoyantSporeInputAction = NewObject<UInputAction>(this, TEXT("IA_BuoyantSpore"));
+	BuoyantSporeInputAction->ValueType = EInputActionValueType::Boolean;
+
+	LiftForkInputAction = NewObject<UInputAction>(this, TEXT("IA_LiftFork"));
+	LiftForkInputAction->ValueType = EInputActionValueType::Boolean;
 
 	JumpInputAction = NewObject<UInputAction>(this, TEXT("IA_Jump"));
 	JumpInputAction->ValueType = EInputActionValueType::Boolean;
@@ -184,9 +286,16 @@ void AVectorCharacter::EnsureRuntimeInput()
 	UInputModifierScalar* GamepadScale = NewObject<UInputModifierScalar>(MoveInputMappingContext);
 	GamepadScale->Scalar = FVector(90.0f, 0.0f, 1.0f);
 	GamepadLook.Modifiers.Add(GamepadScale);
+	MoveInputMappingContext->MapKey(CameraRotateInputAction, EKeys::RightMouseButton);
+	MoveInputMappingContext->MapKey(CameraRotateInputAction, EKeys::MiddleMouseButton);
 
-	// 左键：冲量锤蓄力/释放。
+	// Crashlands-style equipment bar: numbers select, LMB uses the selected tool.
 	MoveInputMappingContext->MapKey(AttackInputAction, EKeys::LeftMouseButton);
+	MoveInputMappingContext->MapKey(SelectHammerInputAction, EKeys::One);
+	MoveInputMappingContext->MapKey(HookInputAction, EKeys::Two);
+	MoveInputMappingContext->MapKey(LubricantInputAction, EKeys::Three);
+	MoveInputMappingContext->MapKey(BuoyantSporeInputAction, EKeys::Four);
+	MoveInputMappingContext->MapKey(LiftForkInputAction, EKeys::Five);
 
 	// 空格：跳跃（躲避冲锋/跨障）。
 	MoveInputMappingContext->MapKey(JumpInputAction, EKeys::SpaceBar);
@@ -216,7 +325,11 @@ void AVectorCharacter::HandleMoveInput(const FInputActionValue& Value)
 void AVectorCharacter::HandleLookInput(const FInputActionValue& Value)
 {
 	const FVector2D LookInput = Value.Get<FVector2D>();
-	if (LookInput.IsNearlyZero() || !GetController())
+	APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	const bool bGamepadRotation = PlayerController
+		&& FMath::Abs(PlayerController->GetInputAnalogKeyState(EKeys::Gamepad_RightX)) > 0.01f;
+	if (LookInput.IsNearlyZero() || !GetController()
+		|| (!bCameraRotateHeld && !bGamepadRotation))
 	{
 		return;
 	}
@@ -225,19 +338,146 @@ void AVectorCharacter::HandleLookInput(const FInputActionValue& Value)
 	AddControllerYawInput(LookInput.X);
 }
 
+void AVectorCharacter::HandleCameraRotatePressed()
+{
+	bCameraRotateHeld = true;
+	if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+	{
+		float CursorX = 0.0f;
+		float CursorY = 0.0f;
+		if (PlayerController->GetMousePosition(CursorX, CursorY))
+		{
+			SavedCursorX = FMath::RoundToInt(CursorX);
+			SavedCursorY = FMath::RoundToInt(CursorY);
+		}
+		PlayerController->bShowMouseCursor = false;
+	}
+}
+
+void AVectorCharacter::HandleCameraRotateReleased()
+{
+	bCameraRotateHeld = false;
+	if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+	{
+		PlayerController->bShowMouseCursor = true;
+		PlayerController->SetMouseLocation(SavedCursorX, SavedCursorY);
+	}
+}
+
 void AVectorCharacter::HandleAttackPressed()
 {
-	if (ImpulseHammer)
+	switch (SelectedEquipmentSlot)
 	{
-		ImpulseHammer->StartCharge();
+	case EVectorEquipmentSlot::Hammer:
+		if (ImpulseHammer)
+		{
+			ImpulseHammer->StartCharge();
+		}
+		break;
+	case EVectorEquipmentSlot::CableGun:
+		if (GravityHook)
+		{
+			GravityHook->StartHook();
+		}
+		break;
+	case EVectorEquipmentSlot::Lubricant:
+		if (ModifierApplicator)
+		{
+			ModifierApplicator->ApplyLubricant();
+		}
+		break;
+	case EVectorEquipmentSlot::BuoyantSpore:
+		if (ModifierApplicator)
+		{
+			ModifierApplicator->ApplyBuoyantSpore();
+		}
+		break;
+	case EVectorEquipmentSlot::LiftFork:
+		if (LiftFork)
+		{
+			LiftFork->ActivateFork();
+		}
+		break;
+	default:
+		break;
 	}
 }
 
 void AVectorCharacter::HandleAttackReleased()
 {
-	if (ImpulseHammer)
+	if (SelectedEquipmentSlot == EVectorEquipmentSlot::Hammer && ImpulseHammer)
 	{
 		ImpulseHammer->ReleaseCharge();
+	}
+	else if (SelectedEquipmentSlot == EVectorEquipmentSlot::CableGun && GravityHook)
+	{
+		GravityHook->ReleaseHook();
+	}
+}
+
+void AVectorCharacter::HandleSelectHammerPressed()
+{
+	SelectEquipment(EVectorEquipmentSlot::Hammer);
+}
+
+void AVectorCharacter::HandleHookPressed()
+{
+	SelectEquipment(EVectorEquipmentSlot::CableGun);
+}
+
+void AVectorCharacter::HandleLubricantPressed()
+{
+	SelectEquipment(EVectorEquipmentSlot::Lubricant);
+}
+
+void AVectorCharacter::HandleBuoyantSporePressed()
+{
+	SelectEquipment(EVectorEquipmentSlot::BuoyantSpore);
+}
+
+void AVectorCharacter::HandleLiftForkPressed()
+{
+	SelectEquipment(EVectorEquipmentSlot::LiftFork);
+}
+
+void AVectorCharacter::SelectEquipment(const EVectorEquipmentSlot NewEquipmentSlot)
+{
+	if (SelectedEquipmentSlot == NewEquipmentSlot)
+	{
+		return;
+	}
+
+	if (SelectedEquipmentSlot == EVectorEquipmentSlot::Hammer
+		&& ImpulseHammer && ImpulseHammer->IsCharging())
+	{
+		ImpulseHammer->CancelAction();
+	}
+	if (SelectedEquipmentSlot == EVectorEquipmentSlot::CableGun && GravityHook)
+	{
+		GravityHook->HolsterHook();
+	}
+
+	SelectedEquipmentSlot = NewEquipmentSlot;
+	UE_LOG(LogTemp, Log, TEXT("Equipment selected: %s"),
+		*GetSelectedEquipmentLabel());
+}
+
+FString AVectorCharacter::GetSelectedEquipmentLabel() const
+{
+	switch (SelectedEquipmentSlot)
+	{
+	case EVectorEquipmentSlot::Hammer:
+		return TEXT("1 HAMMER");
+	case EVectorEquipmentSlot::CableGun:
+		return TEXT("2 CABLE");
+	case EVectorEquipmentSlot::Lubricant:
+		return TEXT("3 LUBE");
+	case EVectorEquipmentSlot::BuoyantSpore:
+		return TEXT("4 FLOAT");
+	case EVectorEquipmentSlot::LiftFork:
+		return TEXT("5 LIFT");
+	default:
+		return TEXT("UNKNOWN");
 	}
 }
 

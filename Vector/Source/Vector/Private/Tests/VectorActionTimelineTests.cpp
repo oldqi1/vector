@@ -5,6 +5,8 @@
 #include "Combat/VectorActionTypes.h"
 #include "Misc/AutomationTest.h"
 
+#include <limits>
+
 /**
  * S02 装备动作时间线账本（FVectorActionTimeline）Automation。
  *
@@ -135,6 +137,56 @@ bool FVectorActionTimelineCancelAndResetTest::RunTest(const FString& Parameters)
 	Timeline.Reset();
 	TestEqual(TEXT("Reset to Idle"), Timeline.Phase, EVectorActionPhase::Idle);
 	TestEqual(TEXT("Reset clears charge"), Timeline.ChargeProgress, 0.0, 1.e-6);
+
+	return true;
+}
+
+// ---------------------------------------------------------------------------
+// 5. 输入维持型 Active：不自动结束，释放后 Recovery → Idle
+// ---------------------------------------------------------------------------
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FVectorActionTimelineContinuousActiveTest,
+	"Vector.Action.Timeline.ContinuousActive",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FVectorActionTimelineContinuousActiveTest::RunTest(const FString& Parameters)
+{
+	FVectorActionTimeline FiniteTimeline;
+	FiniteTimeline.ActiveSeconds = 0.10;
+	TestTrue(TEXT("Idle can start finite Active"), FiniteTimeline.TryStartActive());
+	FiniteTimeline.Advance(0.11);
+	TestEqual(TEXT("Finite Active automatically enters Recovery"),
+		FiniteTimeline.Phase, EVectorActionPhase::Recovery);
+
+	FVectorActionTimeline HitchTimeline;
+	HitchTimeline.ActiveSeconds = 0.10;
+	HitchTimeline.RecoverySeconds = 0.40;
+	TestTrue(TEXT("Start finite action before hitch"), HitchTimeline.TryStartActive());
+	HitchTimeline.Advance(0.55);
+	TestEqual(TEXT("One long frame consumes Active and Recovery"),
+		HitchTimeline.Phase, EVectorActionPhase::Idle);
+
+	FVectorActionTimeline InvalidDurationTimeline;
+	InvalidDurationTimeline.ActiveSeconds = std::numeric_limits<double>::infinity();
+	InvalidDurationTimeline.RecoverySeconds = std::numeric_limits<double>::quiet_NaN();
+	TestTrue(TEXT("Invalid durations still start safely"), InvalidDurationTimeline.TryStartActive());
+	InvalidDurationTimeline.Advance(0.01);
+	TestEqual(TEXT("Invalid durations cannot strand the action lock"),
+		InvalidDurationTimeline.Phase, EVectorActionPhase::Idle);
+
+	FVectorActionTimeline Timeline;
+	Timeline.bActiveUntilReleased = true;
+	Timeline.RecoverySeconds = 0.30;
+
+	TestTrue(TEXT("Idle can start continuous Active"), Timeline.TryStartActive());
+	Timeline.Advance(10.0);
+	TestEqual(TEXT("Continuous Active does not time out"), Timeline.Phase, EVectorActionPhase::Active);
+	TestTrue(TEXT("Input release enters Recovery"), Timeline.TryEndActive());
+	TestEqual(TEXT("Phase is Recovery"), Timeline.Phase, EVectorActionPhase::Recovery);
+	Timeline.Advance(0.31);
+	TestEqual(TEXT("Recovery returns to Idle"), Timeline.Phase, EVectorActionPhase::Idle);
+	TestEqual(TEXT("Idle clears continuous action progress"), Timeline.ChargeProgress, 0.0, 1.e-6);
 
 	return true;
 }

@@ -8,6 +8,11 @@
 
 /** 生命归零时广播（灰盒期绑定死亡表现，如销毁）。 */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FVectorHealthDeathSignature);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(
+	FVectorHealthChangedSignature,
+	double, CurrentHealth,
+	double, MaximumHealth,
+	double, HealthDelta);
 
 /**
  * 核心生命组件（S05：敌人的"击杀层"）。
@@ -22,6 +27,7 @@ class VECTOR_API UVectorHealthComponent : public UActorComponent
 
 public:
 	UVectorHealthComponent();
+	virtual void BeginPlay() override;
 
 	/**
 	 * 施加伤害（扣核心生命）。
@@ -49,6 +55,10 @@ public:
 	/** 生命归零广播（只读事实，不承载表现）。 */
 	UPROPERTY(BlueprintAssignable, Category = "Vector|Health")
 	FVectorHealthDeathSignature OnDeath;
+
+	/** 生命变化广播；HealthDelta < 0 表示受伤，> 0 表示恢复。 */
+	UPROPERTY(BlueprintAssignable, Category = "Vector|Health")
+	FVectorHealthChangedSignature OnHealthChanged;
 
 	/** 核心生命上限（对齐原项目核心 100 档）。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Health", meta = (ClampMin = "1.0"))
