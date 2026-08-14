@@ -30,6 +30,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Vector|PCG|Encounter")
 	int32 GetActiveWaveNumber() const { return FMath::Clamp(NextWaveIndex, 0, 3); }
 
+	UFUNCTION(BlueprintPure, Category = "Vector|PCG|Encounter")
+	FString GetModuleSequenceDescription() const
+	{
+		return FString::Join(ModuleSequence, TEXT(">"));
+	}
+
 	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
 	int32 GenerationSeed = 0;
 

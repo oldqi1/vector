@@ -8,9 +8,11 @@
 #include "Combat/VectorKillAttributionComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "Hunt/VectorEncounterComponent.h"
 #include "Hunt/VectorHuntProgressComponent.h"
+#include "PCG/VectorPCGEncounterDirector.h"
 #include "UObject/ConstructorHelpers.h"
 #include "VectorGameMode.h"
 
@@ -96,6 +98,18 @@ void AVectorExtractionZone::HandleOverlap(
 			Encounter->GetElapsedSeconds(),
 			TotalEnemies - Encounter->GetRemainingEnemies(), TotalEnemies,
 			Hunt->GetSecuredOrgans(), CollectionRate * 100.0);
+		for (TActorIterator<AVectorPCGEncounterDirector> It(GetWorld()); It; ++It)
+		{
+			const AVectorPCGEncounterDirector* Director = *It;
+			if (Director)
+			{
+				UE_LOG(LogVectorExtraction, Log,
+					TEXT("Hunt PCG summary: seed=%d modules=%s"),
+					Director->GetGenerationSeed(),
+					*Director->GetModuleSequenceDescription());
+				break;
+			}
+		}
 		if (GameMode->KillAttribution)
 		{
 			GameMode->KillAttribution->LogSummary();
