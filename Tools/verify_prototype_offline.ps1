@@ -67,6 +67,7 @@ try {
         @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGRoomTrigger.cpp"; Text = "SetRespawnCheckpoint" },
         @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "MAGNET-SHELL BEAST" },
         @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "WAVE %d / 3" },
+        @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "GetActiveModuleName" },
         @{ Path = "Vector/Source/Vector/Private/Boss/VectorPhysicsBoss.cpp"; Text = "QueueDirectionalVelocityOverride" },
         @{ Path = "Vector/Source/Vector/Private/Boss/VectorPhysicsBoss.cpp"; Text = "Boss slam landed" },
         @{ Path = "Vector/Source/Vector/Private/Gameplay/VectorCharacterMovementComponent.cpp"; Text = "OnLandedWithImpact" },

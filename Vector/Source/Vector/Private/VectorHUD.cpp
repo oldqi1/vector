@@ -246,10 +246,11 @@ void AVectorHUD::DrawHUD()
 				continue;
 			}
 			DrawText(
-				FString::Printf(TEXT("SEED %d  |  WAVE %d / 3"),
-					Director->GetGenerationSeed(), Director->GetActiveWaveNumber()),
+				FString::Printf(TEXT("SEED %d  |  WAVE %d / 3  |  %s"),
+					Director->GetGenerationSeed(), Director->GetActiveWaveNumber(),
+					*Director->GetActiveModuleName()),
 				FLinearColor(0.3f, 0.85f, 1.0f),
-				Canvas->ClipX - 260.0f, 36.0f,
+				Canvas->ClipX - 390.0f, 36.0f,
 				GEngine->GetMediumFont(), 0.9f, false);
 			break;
 		}

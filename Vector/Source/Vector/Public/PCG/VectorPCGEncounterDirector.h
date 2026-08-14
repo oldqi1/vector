@@ -36,6 +36,17 @@ public:
 		return FString::Join(ModuleSequence, TEXT(">"));
 	}
 
+	UFUNCTION(BlueprintPure, Category = "Vector|PCG|Encounter")
+	FString GetActiveModuleName() const
+	{
+		const int32 ModuleIndex = FMath::Clamp(NextWaveIndex, 0, 3);
+		if (ModuleSequence.IsValidIndex(ModuleIndex))
+		{
+			return ModuleSequence[ModuleIndex];
+		}
+		return TEXT("Unknown");
+	}
+
 	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
 	int32 GenerationSeed = 0;
 
