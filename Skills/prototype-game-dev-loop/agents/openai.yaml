@@ -1,0 +1,4 @@
+interface:
+  display_name: "游戏原型协作闭环"
+  short_description: "覆盖设计校准、持续实现、验证、PIE验收与Git阶段提交"
+  default_prompt: "Use $prototype-game-dev-loop to continue this game prototype from design alignment through implementation, validation, and handoff."
