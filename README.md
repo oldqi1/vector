@@ -54,6 +54,8 @@ Vector/
 
 本轮统一 PIE 成功标准见 `Docs/最小狩猎闭环验收_2026-08-14.md`。
 
+提交前离线回归可运行：`powershell -ExecutionPolicy Bypass -File Tools/verify_prototype_offline.ps1`。它检查 30 项 Automation 注册、灰盒脚本语法、关键闭环连线与四组确定性物理模拟；UE 编译和 PIE 仍由编辑器侧完成。
+
 ## 数值账本（当前）
 
 | 项 | 值 |

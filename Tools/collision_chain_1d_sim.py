@@ -120,3 +120,9 @@ if v > threshold:
     print(f"→ 碰撞伤害 {dmg2:.1f}，碰后 A={v1_after:.0f} / B={v2_after:.0f} cm/s")
 else:
     print(f"→ 低于阈值 300，无伤害！B 完全不受影响")
+
+assert damage > 0.0, "expected adjacent target to receive collision damage"
+assert math.isclose(momentum_before, momentum_after, rel_tol=1e-9, abs_tol=1e-6), "momentum drift"
+assert energy_after <= energy_before + 1e-6, "collision gained kinetic energy"
+assert dist_b >= 800.0, "chain target did not travel far enough to be useful"
+print("check=PASS")
