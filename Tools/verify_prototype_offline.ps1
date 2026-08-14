@@ -58,6 +58,8 @@ try {
         @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGEncounterDirector.cpp"; Text = "SealDynamicEncounter" },
         @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGEncounterDirector.cpp"; Text = "SetZoneActive" },
         @{ Path = "Tools/Greybox/setup_tactical_pcg_preview.py"; Text = "boss_overload_friction_zone" },
+        @{ Path = "Tools/Greybox/setup_tactical_pcg_preview.py"; Text = "wave_one_exit_gate" },
+        @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGEncounterDirector.cpp"; Text = "SetGateLocked(false)" },
         @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "MAGNET-SHELL BEAST" },
         @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "WAVE %d / 3" },
         @{ Path = "Vector/Source/Vector/Private/Boss/VectorPhysicsBoss.cpp"; Text = "QueueDirectionalVelocityOverride" },

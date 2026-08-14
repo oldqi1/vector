@@ -10,6 +10,7 @@
 class AVectorEnemy;
 class AVectorPhysicsBoss;
 class AVectorLowFrictionZone;
+class AVectorPCGWaveGate;
 class UVectorEncounterComponent;
 
 /** Activates deterministic PCG rooms sequentially under one hunt contract. */
@@ -48,6 +49,12 @@ public:
 
 	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
 	TObjectPtr<AVectorLowFrictionZone> BossOverloadFrictionZone;
+
+	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
+	TObjectPtr<AVectorPCGWaveGate> WaveOneExitGate;
+
+	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
+	TObjectPtr<AVectorPCGWaveGate> WaveTwoExitGate;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
 	TSubclassOf<AVectorEnemy> EnemyClass;

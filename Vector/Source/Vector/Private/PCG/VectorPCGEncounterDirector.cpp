@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "PCG/VectorPCGEncounterDirector.h"
+#include "PCG/VectorPCGWaveGate.h"
 
 #include "Boss/VectorPhysicsBoss.h"
 #include "Combat/VectorEnemy.h"
@@ -33,6 +34,14 @@ void AVectorPCGEncounterDirector::BeginPlay()
 	}
 
 	Encounter->BeginDynamicEncounter();
+	if (WaveOneExitGate)
+	{
+		WaveOneExitGate->SetGateLocked(true);
+	}
+	if (WaveTwoExitGate)
+	{
+		WaveTwoExitGate->SetGateLocked(true);
+	}
 	Encounter->OnEncounterProgress.AddUniqueDynamic(
 		this, &AVectorPCGEncounterDirector::HandleEncounterProgress);
 	SpawnNextWave();
@@ -84,9 +93,17 @@ void AVectorPCGEncounterDirector::SpawnNextWave()
 		SpawnedCount = SpawnEncounterWave(EncounterWaveOneSpawns, WaveBeingSpawned);
 		break;
 	case 1:
+		if (WaveOneExitGate)
+		{
+			WaveOneExitGate->SetGateLocked(false);
+		}
 		SpawnedCount = SpawnEncounterWave(EncounterWaveTwoSpawns, WaveBeingSpawned);
 		break;
 	case 2:
+		if (WaveTwoExitGate)
+		{
+			WaveTwoExitGate->SetGateLocked(false);
+		}
 		SpawnedCount = SpawnBossWave();
 		break;
 	default:
