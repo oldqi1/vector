@@ -17,6 +17,7 @@ BOSS_SPAWN_POINT = None
 BOSS_ADD_SPAWN_POINTS = []
 BOSS_OVERLOAD_FRICTION_ZONE = None
 WAVE_GATES = []
+ROOM_TRIGGERS = []
 
 
 def log(message):
@@ -226,11 +227,13 @@ def main(seed=SEED):
     global ENCOUNTER_WAVES, BOSS_SPAWN_POINT, BOSS_ADD_SPAWN_POINTS
     global BOSS_OVERLOAD_FRICTION_ZONE
     global WAVE_GATES
+    global ROOM_TRIGGERS
     ENCOUNTER_WAVES = []
     BOSS_SPAWN_POINT = None
     BOSS_ADD_SPAWN_POINTS = []
     BOSS_OVERLOAD_FRICTION_ZONE = None
     WAVE_GATES = []
+    ROOM_TRIGGERS = []
     library = getattr(unreal, "VectorTacticalGenerationLibrary", None)
     if library is None:
         raise RuntimeError("VectorTacticalGenerationLibrary missing; compile and restart the editor")
@@ -246,6 +249,7 @@ def main(seed=SEED):
         "contract_exit": load_native_class("/Script/Vector.VectorContractExit"),
         "director": load_native_class("/Script/Vector.VectorPCGEncounterDirector"),
         "wave_gate": load_native_class("/Script/Vector.VectorPCGWaveGate"),
+        "room_trigger": load_native_class("/Script/Vector.VectorPCGRoomTrigger"),
         "navmesh": load_native_class("/Script/NavigationSystem.NavMeshBoundsVolume"),
         "game_mode": load_native_class("/Script/Vector.VectorGameMode"),
     }
@@ -284,9 +288,22 @@ def main(seed=SEED):
         gate.set_actor_label(PREFIX + "WaveGate_%d" % gate_index)
         WAVE_GATES.append(gate)
 
+    trigger_positions = (0.5 * MODULE_SPACING,
+                         1.5 * MODULE_SPACING + 250.0,
+                         2.5 * MODULE_SPACING + 250.0)
+    for room_index, trigger_x in enumerate(trigger_positions):
+        trigger = subsystem().spawn_actor_from_class(
+            classes["room_trigger"], unreal.Vector(trigger_x, 0.0, 160.0))
+        if trigger is None:
+            raise RuntimeError("failed to spawn PCG room trigger %d" % room_index)
+        trigger.set_actor_label(PREFIX + "RoomTrigger_%d" % room_index)
+        trigger.set_editor_property("room_index", room_index)
+        ROOM_TRIGGERS.append(trigger)
+
     build_navmesh(classes["navmesh"], len(sequence))
     if (len(ENCOUNTER_WAVES) != 2 or BOSS_SPAWN_POINT is None
-            or BOSS_OVERLOAD_FRICTION_ZONE is None or len(WAVE_GATES) != 2):
+            or BOSS_OVERLOAD_FRICTION_ZONE is None or len(WAVE_GATES) != 2
+            or len(ROOM_TRIGGERS) != 3):
         raise RuntimeError(
             "runtime encounter wiring incomplete: waves=%d boss=%s"
             % (len(ENCOUNTER_WAVES), BOSS_SPAWN_POINT))
@@ -305,6 +322,7 @@ def main(seed=SEED):
         "boss_overload_friction_zone", BOSS_OVERLOAD_FRICTION_ZONE)
     director.set_editor_property("wave_one_exit_gate", WAVE_GATES[0])
     director.set_editor_property("wave_two_exit_gate", WAVE_GATES[1])
+    director.set_editor_property("room_activation_triggers", ROOM_TRIGGERS)
     log("layout: " + library.describe_layout(seed))
     log("SUCCESS: deterministic PCG route built with sequential 8+8+Boss waves; Build Paths before Play")
 

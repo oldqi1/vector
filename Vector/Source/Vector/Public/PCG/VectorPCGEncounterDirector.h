@@ -11,6 +11,7 @@ class AVectorEnemy;
 class AVectorPhysicsBoss;
 class AVectorLowFrictionZone;
 class AVectorPCGWaveGate;
+class AVectorPCGRoomTrigger;
 class UVectorEncounterComponent;
 
 /** Activates deterministic PCG rooms sequentially under one hunt contract. */
@@ -56,6 +57,9 @@ public:
 	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
 	TObjectPtr<AVectorPCGWaveGate> WaveTwoExitGate;
 
+	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
+	TArray<TObjectPtr<AVectorPCGRoomTrigger>> RoomActivationTriggers;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
 	TSubclassOf<AVectorEnemy> EnemyClass;
 
@@ -71,6 +75,9 @@ private:
 		EVectorPhysicsBossPhase PreviousPhase,
 		EVectorPhysicsBossPhase CurrentPhase);
 
+	UFUNCTION()
+	void HandleRoomEntered(int32 RoomIndex);
+
 	void SpawnNextWave();
 	int32 SpawnEncounterWave(const TArray<TObjectPtr<AActor>>& SpawnPoints, int32 WaveIndex);
 	int32 SpawnBossWave();
@@ -82,4 +89,5 @@ private:
 
 	int32 NextWaveIndex = 0;
 	bool bSpawningWave = false;
+	bool bCurrentWaveActive = false;
 };

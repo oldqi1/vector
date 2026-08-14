@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "PCG/VectorPCGEncounterDirector.h"
+#include "PCG/VectorPCGRoomTrigger.h"
 #include "PCG/VectorPCGWaveGate.h"
 
 #include "Boss/VectorPhysicsBoss.h"
@@ -44,6 +45,31 @@ void AVectorPCGEncounterDirector::BeginPlay()
 	}
 	Encounter->OnEncounterProgress.AddUniqueDynamic(
 		this, &AVectorPCGEncounterDirector::HandleEncounterProgress);
+	for (AVectorPCGRoomTrigger* Trigger : RoomActivationTriggers)
+	{
+		if (Trigger)
+		{
+			Trigger->OnRoomEntered.AddUniqueDynamic(
+				this, &AVectorPCGEncounterDirector::HandleRoomEntered);
+		}
+	}
+	if (RoomActivationTriggers.Num() == 0)
+	{
+		UE_LOG(LogVectorPCGEncounter, Warning,
+			TEXT("PCG route has no room triggers; activating first wave immediately"));
+		SpawnNextWave();
+	}
+}
+
+void AVectorPCGEncounterDirector::HandleRoomEntered(const int32 RoomIndex)
+{
+	if (bCurrentWaveActive || bSpawningWave || RoomIndex != NextWaveIndex)
+	{
+		UE_LOG(LogVectorPCGEncounter, Warning,
+			TEXT("PCG room activation rejected: requested=%d expected=%d active=%d spawning=%d"),
+			RoomIndex, NextWaveIndex, bCurrentWaveActive ? 1 : 0, bSpawningWave ? 1 : 0);
+		return;
+	}
 	SpawnNextWave();
 }
 
@@ -67,14 +93,33 @@ void AVectorPCGEncounterDirector::HandleEncounterProgress(
 	const int32 RemainingEnemies,
 	const int32 TotalEnemies)
 {
-	if (bSpawningWave || !Encounter || Encounter->IsComplete() || RemainingEnemies != 0)
+	if (bSpawningWave || !bCurrentWaveActive || !Encounter
+		|| Encounter->IsComplete() || RemainingEnemies != 0)
 	{
 		return;
 	}
+	bCurrentWaveActive = false;
+	const int32 ClearedWaveIndex = NextWaveIndex - 1;
+	if (ClearedWaveIndex == 0 && WaveOneExitGate)
+	{
+		WaveOneExitGate->SetGateLocked(false);
+	}
+	else if (ClearedWaveIndex == 1 && WaveTwoExitGate)
+	{
+		WaveTwoExitGate->SetGateLocked(false);
+	}
+	else if (ClearedWaveIndex == 2)
+	{
+		Encounter->SealDynamicEncounter();
+	}
 	UE_LOG(LogVectorPCGEncounter, Log,
-		TEXT("PCG wave cleared: nextWave=%d cumulativeTotal=%d"),
-		NextWaveIndex, TotalEnemies);
-	SpawnNextWave();
+		TEXT("PCG wave cleared: wave=%d nextRoom=%d cumulativeTotal=%d sealed=%s"),
+		ClearedWaveIndex + 1, NextWaveIndex, TotalEnemies,
+		ClearedWaveIndex == 2 ? TEXT("YES") : TEXT("no"));
+	if (RoomActivationTriggers.Num() == 0 && ClearedWaveIndex < 2)
+	{
+		SpawnNextWave();
+	}
 }
 
 void AVectorPCGEncounterDirector::SpawnNextWave()
@@ -93,17 +138,9 @@ void AVectorPCGEncounterDirector::SpawnNextWave()
 		SpawnedCount = SpawnEncounterWave(EncounterWaveOneSpawns, WaveBeingSpawned);
 		break;
 	case 1:
-		if (WaveOneExitGate)
-		{
-			WaveOneExitGate->SetGateLocked(false);
-		}
 		SpawnedCount = SpawnEncounterWave(EncounterWaveTwoSpawns, WaveBeingSpawned);
 		break;
 	case 2:
-		if (WaveTwoExitGate)
-		{
-			WaveTwoExitGate->SetGateLocked(false);
-		}
 		SpawnedCount = SpawnBossWave();
 		break;
 	default:
@@ -114,6 +151,7 @@ void AVectorPCGEncounterDirector::SpawnNextWave()
 		return;
 	}
 	bSpawningWave = false;
+	bCurrentWaveActive = SpawnedCount > 0;
 
 	UE_LOG(LogVectorPCGEncounter, Log,
 		TEXT("PCG wave activated: wave=%d spawned=%d remaining=%d total=%d"),
@@ -121,7 +159,8 @@ void AVectorPCGEncounterDirector::SpawnNextWave()
 		Encounter->GetRemainingEnemies(), Encounter->GetTotalEnemies());
 	if (SpawnedCount == 0)
 	{
-		SpawnNextWave();
+		bCurrentWaveActive = true;
+		HandleEncounterProgress(0, Encounter->GetTotalEnemies());
 	}
 }
 
