@@ -11,6 +11,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "Hunt/VectorContractExit.h"
 #include "Hunt/VectorEncounterComponent.h"
 #include "Hunt/VectorHuntProgressComponent.h"
 #include "Physics/VectorPhysicsModifierComponent.h"
@@ -219,6 +220,30 @@ void AVectorHUD::DrawHUD()
 	if (!World)
 	{
 		return;
+	}
+
+	if (GEngine)
+	{
+		for (TActorIterator<AVectorContractExit> It(World); It; ++It)
+		{
+			const AVectorContractExit* Exit = *It;
+			FVector2D ScreenPosition;
+			if (!Exit || !PlayerOwner->ProjectWorldLocationToScreen(
+				Exit->GetActorLocation() + FVector(0.0, 0.0, 280.0),
+				ScreenPosition, true))
+			{
+				continue;
+			}
+			const bool bOpen = Exit->IsUnlocked();
+			DrawText(
+				bOpen ? TEXT("EXIT OPEN") : TEXT("EXIT LOCKED - CLEAR ALL"),
+				bOpen ? FLinearColor(0.1f, 1.0f, 0.25f) : FLinearColor(1.0f, 0.12f, 0.04f),
+				ScreenPosition.X - (bOpen ? 48.0f : 100.0f),
+				ScreenPosition.Y,
+				GEngine->GetMediumFont(),
+				0.85f,
+				false);
+		}
 	}
 
 	// VectorEnemy derives from VectorTestDummy. Iterating the shared base keeps
