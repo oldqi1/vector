@@ -7,6 +7,7 @@
 #include "VectorEncounterComponent.generated.h"
 
 class UVectorHealthComponent;
+class AVectorEnemy;
 
 UENUM(BlueprintType)
 enum class EVectorEncounterState : uint8
@@ -39,6 +40,18 @@ public:
 	/** Pure ledger transition used by bound enemy death events and Automation tests. */
 	void NotifyEnemyDefeated();
 
+	/** Opens a multi-wave contract. Zero remaining between waves is not completion until sealed. */
+	void BeginDynamicEncounter();
+
+	/** Adds a wave budget to an open dynamic contract. */
+	bool AddEncounterEnemies(int32 EnemyCount);
+
+	/** Prevents further waves; completes immediately when no registered enemies remain. */
+	void SealDynamicEncounter();
+
+	/** Binds one runtime-spawned enemy and adds it to the dynamic contract. */
+	bool RegisterSpawnedEnemy(AVectorEnemy* Enemy);
+
 	/** Scans live VectorEnemy actors and binds their health death events. */
 	UFUNCTION(BlueprintCallable, Category = "Vector|Hunt")
 	void RegisterExistingEnemies();
@@ -70,6 +83,7 @@ private:
 	void HandleRegisteredEnemyDeath();
 
 	void ClearEnemyBindings();
+	void CompleteEncounterIfReady();
 
 	UPROPERTY(VisibleAnywhere, Category = "Vector|Hunt")
 	EVectorEncounterState EncounterState = EVectorEncounterState::Inactive;
@@ -84,4 +98,6 @@ private:
 	double CompletionTimeSeconds = 0.0;
 
 	TSet<TWeakObjectPtr<UVectorHealthComponent>> RegisteredHealthComponents;
+	bool bDynamicEncounterActive = false;
+	bool bEncounterSealed = true;
 };

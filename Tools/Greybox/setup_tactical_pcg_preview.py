@@ -12,6 +12,9 @@ import unreal
 SEED = 4417
 PREFIX = "PCG_"
 MODULE_SPACING = 2800.0
+ENCOUNTER_WAVES = []
+BOSS_SPAWN_POINT = None
+BOSS_ADD_SPAWN_POINTS = []
 
 
 def log(message):
@@ -96,9 +99,14 @@ def build_open_bowl(center_x, target_point_class):
     spawn_boundary(center_x)
     spawn_cube((center_x + 1050.0, 0.0, 125.0),
                (1.0, 22.0, 3.5), "OpenBowl_ImpactWall")
-    for index, offset in enumerate(((-650, -350), (-200, 350), (300, -250), (650, 300))):
-        spawn_marker(target_point_class, (center_x + offset[0], offset[1], 80.0),
-                     "OpenBowl_Enemy_%02d" % index)
+    markers = []
+    offsets = ((-750, -550), (-750, 550), (-400, 0), (-50, -500),
+               (-50, 500), (350, -250), (350, 300), (700, 0))
+    for index, offset in enumerate(offsets):
+        markers.append(spawn_marker(
+            target_point_class, (center_x + offset[0], offset[1], 80.0),
+            "OpenBowl_Enemy_%02d" % index))
+    ENCOUNTER_WAVES.append(markers)
 
 
 def build_hard_lane(center_x, target_point_class):
@@ -107,9 +115,14 @@ def build_hard_lane(center_x, target_point_class):
     spawn_cube((center_x, -500.0, 125.0), (24.0, 1.0, 3.5), "HardLane_WallSouth")
     spawn_cube((center_x + 1150.0, 0.0, 125.0), (1.0, 11.0, 3.5), "HardLane_Receiver")
     spawn_cube((center_x - 900.0, 0.0, 75.0), (4.0, 8.0, 1.5), "HardLane_LaunchShelf")
-    for index, offset in enumerate((-600.0, 0.0, 650.0)):
-        spawn_marker(target_point_class, (center_x + offset, 0.0, 120.0),
-                     "HardLane_Enemy_%02d" % index)
+    markers = []
+    offsets = ((-850, -260), (-850, 260), (-500, 0), (-150, -260),
+               (-150, 260), (250, 0), (600, -250), (600, 250))
+    for index, offset in enumerate(offsets):
+        markers.append(spawn_marker(
+            target_point_class, (center_x + offset[0], offset[1], 120.0),
+            "HardLane_Enemy_%02d" % index))
+    ENCOUNTER_WAVES.append(markers)
 
 
 def build_height_shelf(center_x, target_point_class):
@@ -119,8 +132,14 @@ def build_height_shelf(center_x, target_point_class):
     spawn_cube((center_x - 50.0, 0.0, 25.0), (1.5, 18.0, 1.0), "HeightShelf_Step1")
     spawn_cube((center_x + 100.0, 0.0, 75.0), (1.5, 18.0, 2.0), "HeightShelf_Step2")
     spawn_cube((center_x - 1050.0, 0.0, 125.0), (1.0, 22.0, 3.5), "HeightShelf_Receiver")
-    spawn_marker(target_point_class, (center_x + 450.0, -350.0, 380.0), "HeightShelf_Enemy_High")
-    spawn_marker(target_point_class, (center_x - 500.0, 300.0, 80.0), "HeightShelf_Enemy_Low")
+    markers = []
+    offsets = ((450, -600, 380), (450, -200, 380), (450, 250, 380), (450, 650, 380),
+               (-700, -600, 80), (-700, -200, 80), (-700, 250, 80), (-700, 650, 80))
+    for index, offset in enumerate(offsets):
+        markers.append(spawn_marker(
+            target_point_class, (center_x + offset[0], offset[1], offset[2]),
+            "HeightShelf_Enemy_%02d" % index))
+    ENCOUNTER_WAVES.append(markers)
 
 
 def build_slick_cross(center_x, target_point_class, friction_class):
@@ -133,30 +152,48 @@ def build_slick_cross(center_x, target_point_class, friction_class):
     if zone is None:
         raise RuntimeError("failed to spawn low-friction zone")
     zone.set_actor_label(PREFIX + "SlickCross_LowFrictionZone")
-    for index, offset in enumerate(((-500, 0), (0, -500), (500, 0), (0, 500))):
-        spawn_marker(target_point_class, (center_x + offset[0], offset[1], 80.0),
-                     "SlickCross_Enemy_%02d" % index)
+    markers = []
+    offsets = ((-700, 0), (-450, -450), (-450, 450), (0, -700),
+               (0, 700), (450, -450), (450, 450), (700, 0))
+    for index, offset in enumerate(offsets):
+        markers.append(spawn_marker(
+            target_point_class, (center_x + offset[0], offset[1], 80.0),
+            "SlickCross_Enemy_%02d" % index))
+    ENCOUNTER_WAVES.append(markers)
 
 
 def build_boss_ring(center_x, target_point_class):
+    global BOSS_SPAWN_POINT, BOSS_ADD_SPAWN_POINTS
     spawn_floor(center_x, 3200.0, 3000.0, "BossRing_Floor")
     spawn_boundary(center_x, 1600.0, 1500.0)
     for index, offset in enumerate(((-1350, -1250), (-1350, 1250), (1350, -1250), (1350, 1250))):
         spawn_cube((center_x + offset[0], offset[1], 175.0),
                    (2.5, 2.5, 4.5), "BossRing_Pillar_%02d" % index)
     spawn_cube((center_x, 1150.0, 125.0), (8.0, 4.0, 3.5), "BossRing_HeightShelf")
-    spawn_marker(target_point_class, (center_x, 0.0, 100.0), "BossRing_BossSpawn")
-    spawn_marker(target_point_class, (center_x - 650.0, -450.0, 80.0), "BossRing_AddSpawn_A")
-    spawn_marker(target_point_class, (center_x + 650.0, 450.0, 80.0), "BossRing_AddSpawn_B")
+    BOSS_SPAWN_POINT = spawn_marker(
+        target_point_class, (center_x, 0.0, 100.0), "BossRing_BossSpawn")
+    BOSS_ADD_SPAWN_POINTS = [
+        spawn_marker(target_point_class, (center_x - 650.0, -450.0, 80.0), "BossRing_AddSpawn_A"),
+        spawn_marker(target_point_class, (center_x + 650.0, 450.0, 80.0), "BossRing_AddSpawn_B"),
+    ]
 
 
-def build_extraction(center_x, extraction_class):
+def build_extraction(center_x, extraction_class, contract_exit_class):
     spawn_floor(center_x, 1400.0, 1400.0, "Extraction_Floor")
+    spawn_cube((center_x, 300.0, 125.0),
+               (14.0, 1.0, 3.5), "Extraction_WallNorth")
+    spawn_cube((center_x, -300.0, 125.0),
+               (14.0, 1.0, 3.5), "Extraction_WallSouth")
     zone = subsystem().spawn_actor_from_class(
         extraction_class, unreal.Vector(center_x, 0.0, 140.0))
     if zone is None:
         raise RuntimeError("failed to spawn extraction zone")
     zone.set_actor_label(PREFIX + "ExtractionZone")
+    gate = subsystem().spawn_actor_from_class(
+        contract_exit_class, unreal.Vector(center_x - 650.0, 0.0, 180.0))
+    if gate is None:
+        raise RuntimeError("failed to spawn contract exit")
+    gate.set_actor_label(PREFIX + "ContractExit")
 
 
 def configure_game_mode(game_mode_class):
@@ -178,6 +215,10 @@ def build_navmesh(navmesh_class, module_count):
 
 
 def main(seed=SEED):
+    global ENCOUNTER_WAVES, BOSS_SPAWN_POINT, BOSS_ADD_SPAWN_POINTS
+    ENCOUNTER_WAVES = []
+    BOSS_SPAWN_POINT = None
+    BOSS_ADD_SPAWN_POINTS = []
     library = getattr(unreal, "VectorTacticalGenerationLibrary", None)
     if library is None:
         raise RuntimeError("VectorTacticalGenerationLibrary missing; compile and restart the editor")
@@ -190,11 +231,20 @@ def main(seed=SEED):
         "target_point": load_native_class("/Script/Engine.TargetPoint"),
         "friction": load_native_class("/Script/Vector.VectorLowFrictionZone"),
         "extraction": load_native_class("/Script/Vector.VectorExtractionZone"),
+        "contract_exit": load_native_class("/Script/Vector.VectorContractExit"),
+        "director": load_native_class("/Script/Vector.VectorPCGEncounterDirector"),
         "navmesh": load_native_class("/Script/NavigationSystem.NavMeshBoundsVolume"),
         "game_mode": load_native_class("/Script/Vector.VectorGameMode"),
     }
     clear_previous()
     configure_game_mode(classes["game_mode"])
+
+    route_length = (len(sequence) - 1) * MODULE_SPACING + 1800.0
+    spawn_cube(
+        ((len(sequence) - 1) * MODULE_SPACING * 0.5, 0.0, -60.0),
+        (route_length / 100.0, 6.0, 0.4),
+        "RouteSpine",
+    )
 
     builders = {
         "SafeStart": lambda x: build_safe_start(x, classes["target_point"], classes["player_start"]),
@@ -203,7 +253,8 @@ def main(seed=SEED):
         "HeightShelf": lambda x: build_height_shelf(x, classes["target_point"]),
         "SlickCross": lambda x: build_slick_cross(x, classes["target_point"], classes["friction"]),
         "BossRing": lambda x: build_boss_ring(x, classes["target_point"]),
-        "Extraction": lambda x: build_extraction(x, classes["extraction"]),
+        "Extraction": lambda x: build_extraction(
+            x, classes["extraction"], classes["contract_exit"]),
     }
     for index, module_name in enumerate(sequence):
         center_x = index * MODULE_SPACING
@@ -211,8 +262,21 @@ def main(seed=SEED):
         log("module[%d]=%s center_x=%.0f" % (index, module_name, center_x))
 
     build_navmesh(classes["navmesh"], len(sequence))
+    if len(ENCOUNTER_WAVES) != 2 or BOSS_SPAWN_POINT is None:
+        raise RuntimeError(
+            "runtime encounter wiring incomplete: waves=%d boss=%s"
+            % (len(ENCOUNTER_WAVES), BOSS_SPAWN_POINT))
+    director = subsystem().spawn_actor_from_class(
+        classes["director"], unreal.Vector(0.0, 0.0, 100.0))
+    if director is None:
+        raise RuntimeError("failed to spawn PCG encounter director")
+    director.set_actor_label(PREFIX + "EncounterDirector")
+    director.set_editor_property("encounter_wave_one_spawns", ENCOUNTER_WAVES[0])
+    director.set_editor_property("encounter_wave_two_spawns", ENCOUNTER_WAVES[1])
+    director.set_editor_property("boss_spawn_point", BOSS_SPAWN_POINT)
+    director.set_editor_property("boss_add_spawn_points", BOSS_ADD_SPAWN_POINTS)
     log("layout: " + library.describe_layout(seed))
-    log("SUCCESS: deterministic PCG preview built; Build Paths before Play")
+    log("SUCCESS: deterministic PCG route built with sequential 8+8+Boss waves; Build Paths before Play")
 
 
 if __name__ == "__main__":

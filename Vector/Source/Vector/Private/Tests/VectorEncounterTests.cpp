@@ -42,4 +42,37 @@ bool FVectorEncounterLedgerTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FVectorDynamicEncounterLedgerTest,
+	"Vector.Hunt.DynamicEncounterLedger",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FVectorDynamicEncounterLedgerTest::RunTest(const FString& Parameters)
+{
+	UVectorEncounterComponent* Encounter = NewObject<UVectorEncounterComponent>();
+	TestNotNull(TEXT("Dynamic encounter component can be constructed"), Encounter);
+	if (!Encounter)
+	{
+		return false;
+	}
+
+	Encounter->BeginDynamicEncounter();
+	TestEqual(TEXT("Dynamic contract starts active at zero"),
+		Encounter->GetEncounterState(), EVectorEncounterState::Active);
+	TestFalse(TEXT("Unsealed zero is not complete"), Encounter->IsComplete());
+	TestTrue(TEXT("First wave accepted"), Encounter->AddEncounterEnemies(2));
+	Encounter->NotifyEnemyDefeated();
+	Encounter->NotifyEnemyDefeated();
+	TestEqual(TEXT("Between waves remaining reaches zero"), Encounter->GetRemainingEnemies(), 0);
+	TestFalse(TEXT("Between waves does not complete"), Encounter->IsComplete());
+	TestTrue(TEXT("Second wave accepted after zero gap"), Encounter->AddEncounterEnemies(1));
+	Encounter->SealDynamicEncounter();
+	TestFalse(TEXT("Sealed contract waits for final enemy"), Encounter->IsComplete());
+	Encounter->NotifyEnemyDefeated();
+	TestTrue(TEXT("Final sealed wave completes"), Encounter->IsComplete());
+	TestEqual(TEXT("Total is cumulative across waves"), Encounter->GetTotalEnemies(), 3);
+	TestFalse(TEXT("Completed contract rejects another wave"), Encounter->AddEncounterEnemies(1));
+	return true;
+}
+
 #endif

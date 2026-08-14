@@ -12,8 +12,8 @@ try {
     Write-Output "[2/4] Checking Unreal Automation registrations..."
     $TestFiles = Get-ChildItem "Vector/Source/Vector/Private/Tests" -Filter "*.cpp" -File
     $RegistrationCount = ($TestFiles | Select-String -Pattern '^IMPLEMENT_(SIMPLE|COMPLEX)_AUTOMATION_TEST\(').Count
-    if ($RegistrationCount -ne 39) {
-        throw "Expected 39 Automation registrations, found $RegistrationCount"
+    if ($RegistrationCount -ne 40) {
+        throw "Expected 40 Automation registrations, found $RegistrationCount"
     }
     Write-Output "Automation registrations: $RegistrationCount"
 
@@ -53,6 +53,9 @@ try {
         @{ Path = "Vector/Source/Vector/Private/PCG/VectorTacticalGenerationLibrary.cpp"; Text = "FVectorTacticalGenerator::Generate" },
         @{ Path = "Tools/Greybox/setup_tactical_pcg_preview.py"; Text = "generate_module_sequence" },
         @{ Path = "Tools/Greybox/setup_tactical_pcg_preview.py"; Text = "BossRing_BossSpawn" },
+        @{ Path = "Tools/Greybox/setup_tactical_pcg_preview.py"; Text = "encounter_wave_one_spawns" },
+        @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGEncounterDirector.cpp"; Text = "BeginDynamicEncounter" },
+        @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGEncounterDirector.cpp"; Text = "SealDynamicEncounter" },
         @{ Path = "Vector/Source/Vector/Private/Boss/VectorPhysicsBoss.cpp"; Text = "QueueDirectionalVelocityOverride" },
         @{ Path = "Tools/Greybox/setup_physics_boss_test.py"; Text = "/Script/Vector.VectorPhysicsBoss" }
     )

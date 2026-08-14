@@ -33,6 +33,8 @@ void UVectorEncounterComponent::EndPlay(const EEndPlayReason::Type EndPlayReason
 
 void UVectorEncounterComponent::StartEncounter(const int32 EnemyCount)
 {
+	bDynamicEncounterActive = false;
+	bEncounterSealed = true;
 	TotalEnemies = FMath::Max(0, EnemyCount);
 	RemainingEnemies = TotalEnemies;
 	EncounterState = TotalEnemies > 0
@@ -64,7 +66,79 @@ void UVectorEncounterComponent::NotifyEnemyDefeated()
 		RemainingEnemies, TotalEnemies);
 	OnEncounterProgress.Broadcast(RemainingEnemies, TotalEnemies);
 
-	if (RemainingEnemies == 0)
+	CompleteEncounterIfReady();
+}
+
+void UVectorEncounterComponent::BeginDynamicEncounter()
+{
+	ClearEnemyBindings();
+	bDynamicEncounterActive = true;
+	bEncounterSealed = false;
+	TotalEnemies = 0;
+	RemainingEnemies = 0;
+	EncounterState = EVectorEncounterState::Active;
+	StartTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	CompletionTimeSeconds = 0.0;
+	UE_LOG(LogVectorEncounter, Log,
+		TEXT("Dynamic encounter opened: state=ACTIVE sealed=no"));
+	OnEncounterProgress.Broadcast(RemainingEnemies, TotalEnemies);
+}
+
+bool UVectorEncounterComponent::AddEncounterEnemies(const int32 EnemyCount)
+{
+	if (!bDynamicEncounterActive || bEncounterSealed
+		|| EncounterState != EVectorEncounterState::Active || EnemyCount <= 0)
+	{
+		UE_LOG(LogVectorEncounter, Verbose,
+			TEXT("Dynamic encounter add rejected: count=%d state=%d dynamic=%d sealed=%d"),
+			EnemyCount, static_cast<int32>(EncounterState),
+			bDynamicEncounterActive ? 1 : 0, bEncounterSealed ? 1 : 0);
+		return false;
+	}
+	TotalEnemies += EnemyCount;
+	RemainingEnemies += EnemyCount;
+	UE_LOG(LogVectorEncounter, Log,
+		TEXT("Dynamic encounter wave registered: added=%d remaining=%d total=%d"),
+		EnemyCount, RemainingEnemies, TotalEnemies);
+	OnEncounterProgress.Broadcast(RemainingEnemies, TotalEnemies);
+	return true;
+}
+
+void UVectorEncounterComponent::SealDynamicEncounter()
+{
+	if (!bDynamicEncounterActive || bEncounterSealed)
+	{
+		return;
+	}
+	bEncounterSealed = true;
+	UE_LOG(LogVectorEncounter, Log,
+		TEXT("Dynamic encounter sealed: remaining=%d total=%d"),
+		RemainingEnemies, TotalEnemies);
+	CompleteEncounterIfReady();
+}
+
+bool UVectorEncounterComponent::RegisterSpawnedEnemy(AVectorEnemy* Enemy)
+{
+	UVectorHealthComponent* Health = Enemy
+		? Enemy->FindComponentByClass<UVectorHealthComponent>()
+		: nullptr;
+	if (!Health || Health->IsDead() || RegisteredHealthComponents.Contains(Health))
+	{
+		return false;
+	}
+	if (!AddEncounterEnemies(1))
+	{
+		return false;
+	}
+	RegisteredHealthComponents.Add(Health);
+	Health->OnDeath.AddUniqueDynamic(this, &UVectorEncounterComponent::HandleRegisteredEnemyDeath);
+	return true;
+}
+
+void UVectorEncounterComponent::CompleteEncounterIfReady()
+{
+	if (EncounterState == EVectorEncounterState::Active
+		&& RemainingEnemies == 0 && bEncounterSealed)
 	{
 		EncounterState = EVectorEncounterState::Completed;
 		CompletionTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : StartTimeSeconds;
@@ -89,6 +163,12 @@ double UVectorEncounterComponent::GetElapsedSeconds() const
 
 void UVectorEncounterComponent::RegisterExistingEnemies()
 {
+	if (bDynamicEncounterActive)
+	{
+		UE_LOG(LogVectorEncounter, Verbose,
+			TEXT("Existing-enemy scan skipped: dynamic encounter owns registration"));
+		return;
+	}
 	ClearEnemyBindings();
 
 	UWorld* World = GetWorld();

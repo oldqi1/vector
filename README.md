@@ -39,7 +39,7 @@ Vector/
 │   │   ├── Public/Combat/      # 冲量锤/碰撞连锁/生命/敌人三型/动作状态机
 │   │   ├── Public/Stability/   # 稳定/失衡账本（纯 C++ 可测）
 │   │   ├── Public/Impact/      # 碰撞伤害数学（纯函数）
-│   │   └── Private/Tests/      # Automation 测试（39 项）
+│   │   └── Private/Tests/      # Automation 测试（40 项）
 │   ├── Content/Prototype/      # 灰盒地图 + SK_Robot 机器人占位
 │   └── Config/
 ├── Design/原型设计基线_v0.1.md # 轻量设计基线（三项门槛/10 条验收/布局）
@@ -60,7 +60,7 @@ Vector/
 
 本轮统一 PIE 成功标准见 `Docs/最小狩猎闭环验收_2026-08-14.md`。
 
-提交前离线回归可运行：`powershell -ExecutionPolicy Bypass -File Tools/verify_prototype_offline.ps1`。它检查 39 项 Automation 注册、灰盒脚本语法、关键闭环连线与四组确定性物理模拟；UE 编译和 PIE 仍由编辑器侧完成。
+提交前离线回归可运行：`powershell -ExecutionPolicy Bypass -File Tools/verify_prototype_offline.ps1`。它检查 40 项 Automation 注册、灰盒脚本语法、关键闭环连线与四组确定性物理模拟；UE 编译和 PIE 仍由编辑器侧完成。
 
 ## 数值账本（当前）
 
