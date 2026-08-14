@@ -3,6 +3,7 @@
 #include "VectorGameMode.h"
 
 #include "Combat/VectorKillAttributionComponent.h"
+#include "Hunt/VectorEncounterComponent.h"
 #include "Hunt/VectorHuntProgressComponent.h"
 #include "VectorCharacter.h"
 #include "VectorHUD.h"
@@ -16,6 +17,7 @@ AVectorGameMode::AVectorGameMode()
 
 	KillAttribution = CreateDefaultSubobject<UVectorKillAttributionComponent>(TEXT("KillAttribution"));
 	HuntProgress = CreateDefaultSubobject<UVectorHuntProgressComponent>(TEXT("HuntProgress"));
+	Encounter = CreateDefaultSubobject<UVectorEncounterComponent>(TEXT("Encounter"));
 }
 
 void AVectorGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)

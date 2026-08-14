@@ -28,6 +28,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Hunt")
 	TObjectPtr<class UVectorHuntProgressComponent> HuntProgress;
 
+	/** Current fixed encounter contract and clear-state ledger. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Hunt")
+	TObjectPtr<class UVectorEncounterComponent> Encounter;
+
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 };

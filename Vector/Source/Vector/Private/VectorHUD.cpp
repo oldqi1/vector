@@ -11,6 +11,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "Hunt/VectorEncounterComponent.h"
 #include "Hunt/VectorHuntProgressComponent.h"
 #include "Physics/VectorPhysicsModifierComponent.h"
 #include "VectorCharacter.h"
@@ -38,6 +39,27 @@ void AVectorHUD::DrawHUD()
 					FLinearColor(0.25f, 1.0f, 0.4f),
 					40.0f, 36.0f,
 					GEngine->GetMediumFont(), 1.0f, false);
+			}
+			if (const UVectorEncounterComponent* Encounter = GameMode
+				? GameMode->Encounter : nullptr)
+			{
+				FString ContractText;
+				FLinearColor ContractColor(1.0f, 0.72f, 0.12f);
+				if (Encounter->IsComplete())
+				{
+					ContractText = TEXT("CONTRACT COMPLETE - EXIT OPEN");
+					ContractColor = FLinearColor(0.1f, 1.0f, 0.25f);
+				}
+				else if (Encounter->GetEncounterState() == EVectorEncounterState::Active)
+				{
+					ContractText = FString::Printf(TEXT("CONTRACT: HUNT  %d / %d"),
+						Encounter->GetRemainingEnemies(), Encounter->GetTotalEnemies());
+				}
+				if (!ContractText.IsEmpty())
+				{
+					DrawText(ContractText, ContractColor, 40.0f, 62.0f,
+						GEngine->GetMediumFont(), 0.9f, false);
+				}
 			}
 		}
 		if (const UVectorHealthComponent* Health =
