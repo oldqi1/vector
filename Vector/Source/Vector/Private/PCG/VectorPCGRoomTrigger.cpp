@@ -4,6 +4,7 @@
 
 #include "Components/BoxComponent.h"
 #include "GameFramework/Pawn.h"
+#include "VectorCharacter.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVectorPCGRoomTrigger, Log, All);
 
@@ -37,6 +38,17 @@ void AVectorPCGRoomTrigger::HandleBeginOverlap(
 	}
 	bConsumed = true;
 	TriggerBounds->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (bUpdateRespawnCheckpoint)
+	{
+		if (AVectorCharacter* Character = Cast<AVectorCharacter>(OtherActor))
+		{
+			FTransform CheckpointTransform = GetActorTransform();
+			CheckpointTransform.SetLocation(
+				GetActorTransform().TransformPosition(CheckpointLocalOffset));
+			CheckpointTransform.SetScale3D(FVector::OneVector);
+			Character->SetRespawnCheckpoint(CheckpointTransform);
+		}
+	}
 	UE_LOG(LogVectorPCGRoomTrigger, Log,
 		TEXT("PCG room entered: trigger=%s room=%d player=%s"),
 		*GetName(), RoomIndex, *Pawn->GetName());

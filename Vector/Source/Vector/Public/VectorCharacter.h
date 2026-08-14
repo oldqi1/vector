@@ -59,6 +59,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Vector|Equipment")
 	FString GetSelectedEquipmentLabel() const;
 
+	/** Advances the current-run respawn checkpoint without healing or teleporting now. */
+	UFUNCTION(BlueprintCallable, Category = "Vector|Hunt")
+	bool SetRespawnCheckpoint(const FTransform& NewRespawnTransform);
+
 protected:
 	/** 相机固定俯角，单位 deg；原型期不响应鼠标 Pitch。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Camera", meta = (ClampMin = "10.0", ClampMax = "80.0", Units = "deg"))

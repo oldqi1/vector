@@ -27,6 +27,12 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Vector|PCG|Encounter")
 	FVectorPCGRoomEnteredSignature OnRoomEntered;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|PCG|Checkpoint")
+	bool bUpdateRespawnCheckpoint = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|PCG|Checkpoint")
+	FVector CheckpointLocalOffset = FVector(-260.0, 0.0, -40.0);
+
 private:
 	UFUNCTION()
 	void HandleBeginOverlap(

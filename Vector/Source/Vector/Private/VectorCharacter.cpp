@@ -188,6 +188,20 @@ void AVectorCharacter::HandlePlayerDeath()
 		GetCharacterMovement() ? *GetCharacterMovement()->GetMovementName() : TEXT("(none)"));
 }
 
+bool AVectorCharacter::SetRespawnCheckpoint(const FTransform& NewRespawnTransform)
+{
+	if (NewRespawnTransform.ContainsNaN())
+	{
+		return false;
+	}
+	RespawnTransform = NewRespawnTransform;
+	RespawnTransform.SetScale3D(FVector::OneVector);
+	UE_LOG(LogTemp, Log, TEXT("Player checkpoint updated: location=%s rotation=%s"),
+		*RespawnTransform.GetLocation().ToCompactString(),
+		*RespawnTransform.Rotator().ToCompactString());
+	return true;
+}
+
 void AVectorCharacter::Tick(const float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);

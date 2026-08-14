@@ -62,6 +62,7 @@ try {
         @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGEncounterDirector.cpp"; Text = "SetGateLocked(false)" },
         @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGEncounterDirector.cpp"; Text = "HandleRoomEntered" },
         @{ Path = "Tools/Greybox/setup_tactical_pcg_preview.py"; Text = "room_activation_triggers" },
+        @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGRoomTrigger.cpp"; Text = "SetRespawnCheckpoint" },
         @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "MAGNET-SHELL BEAST" },
         @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "WAVE %d / 3" },
         @{ Path = "Vector/Source/Vector/Private/Boss/VectorPhysicsBoss.cpp"; Text = "QueueDirectionalVelocityOverride" },
