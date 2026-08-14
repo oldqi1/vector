@@ -27,8 +27,17 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
+	UFUNCTION(BlueprintCallable, Category = "Vector|Friction")
+	void SetZoneActive(bool bActive);
+
+	UFUNCTION(BlueprintPure, Category = "Vector|Friction")
+	bool IsZoneActive() const { return bZoneActive; }
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Friction")
 	TObjectPtr<UBoxComponent> ZoneBounds;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Friction")
+	bool bStartActive = true;
 
 	/** 统一属性组件存在时使用的基准摩擦倍率。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Friction", meta = (ClampMin = "0.0", ClampMax = "1.0"))
@@ -77,7 +86,9 @@ private:
 
 	void ApplyLowFriction(UCharacterMovementComponent* Movement);
 	void RestoreMovement(UCharacterMovementComponent* Movement);
+	void RestoreAllAffectedMovement();
 
 	TMap<TWeakObjectPtr<UCharacterMovementComponent>, FMovementSettings> OriginalSettings;
 	TSet<TWeakObjectPtr<UVectorPhysicsModifierComponent>> ActiveModifierComponents;
+	bool bZoneActive = true;
 };

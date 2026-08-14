@@ -3,11 +3,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Boss/VectorPhysicsBossState.h"
 #include "GameFramework/Actor.h"
 #include "VectorPCGEncounterDirector.generated.h"
 
 class AVectorEnemy;
 class AVectorPhysicsBoss;
+class AVectorLowFrictionZone;
 class UVectorEncounterComponent;
 
 /** Activates deterministic PCG rooms sequentially under one hunt contract. */
@@ -44,6 +46,9 @@ public:
 	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
 	TArray<TObjectPtr<AActor>> BossAddSpawnPoints;
 
+	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
+	TObjectPtr<AVectorLowFrictionZone> BossOverloadFrictionZone;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
 	TSubclassOf<AVectorEnemy> EnemyClass;
 
@@ -53,6 +58,11 @@ public:
 private:
 	UFUNCTION()
 	void HandleEncounterProgress(int32 RemainingEnemies, int32 TotalEnemies);
+
+	UFUNCTION()
+	void HandleBossPhaseChanged(
+		EVectorPhysicsBossPhase PreviousPhase,
+		EVectorPhysicsBossPhase CurrentPhase);
 
 	void SpawnNextWave();
 	int32 SpawnEncounterWave(const TArray<TObjectPtr<AActor>>& SpawnPoints, int32 WaveIndex);

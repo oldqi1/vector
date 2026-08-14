@@ -15,6 +15,7 @@ MODULE_SPACING = 2800.0
 ENCOUNTER_WAVES = []
 BOSS_SPAWN_POINT = None
 BOSS_ADD_SPAWN_POINTS = []
+BOSS_OVERLOAD_FRICTION_ZONE = None
 
 
 def log(message):
@@ -162,8 +163,8 @@ def build_slick_cross(center_x, target_point_class, friction_class):
     ENCOUNTER_WAVES.append(markers)
 
 
-def build_boss_ring(center_x, target_point_class):
-    global BOSS_SPAWN_POINT, BOSS_ADD_SPAWN_POINTS
+def build_boss_ring(center_x, target_point_class, friction_class):
+    global BOSS_SPAWN_POINT, BOSS_ADD_SPAWN_POINTS, BOSS_OVERLOAD_FRICTION_ZONE
     spawn_floor(center_x, 3200.0, 3000.0, "BossRing_Floor")
     spawn_boundary(center_x, 1600.0, 1500.0)
     for index, offset in enumerate(((-1350, -1250), (-1350, 1250), (1350, -1250), (1350, 1250))):
@@ -176,6 +177,12 @@ def build_boss_ring(center_x, target_point_class):
         spawn_marker(target_point_class, (center_x - 650.0, -450.0, 80.0), "BossRing_AddSpawn_A"),
         spawn_marker(target_point_class, (center_x + 650.0, 450.0, 80.0), "BossRing_AddSpawn_B"),
     ]
+    BOSS_OVERLOAD_FRICTION_ZONE = subsystem().spawn_actor_from_class(
+        friction_class, unreal.Vector(center_x, 0.0, 100.0))
+    if BOSS_OVERLOAD_FRICTION_ZONE is None:
+        raise RuntimeError("failed to spawn BossRing overload friction zone")
+    BOSS_OVERLOAD_FRICTION_ZONE.set_actor_label(PREFIX + "BossRing_OverloadFriction")
+    BOSS_OVERLOAD_FRICTION_ZONE.set_editor_property("start_active", False)
 
 
 def build_extraction(center_x, extraction_class, contract_exit_class):
@@ -216,9 +223,11 @@ def build_navmesh(navmesh_class, module_count):
 
 def main(seed=SEED):
     global ENCOUNTER_WAVES, BOSS_SPAWN_POINT, BOSS_ADD_SPAWN_POINTS
+    global BOSS_OVERLOAD_FRICTION_ZONE
     ENCOUNTER_WAVES = []
     BOSS_SPAWN_POINT = None
     BOSS_ADD_SPAWN_POINTS = []
+    BOSS_OVERLOAD_FRICTION_ZONE = None
     library = getattr(unreal, "VectorTacticalGenerationLibrary", None)
     if library is None:
         raise RuntimeError("VectorTacticalGenerationLibrary missing; compile and restart the editor")
@@ -252,7 +261,8 @@ def main(seed=SEED):
         "HardLane": lambda x: build_hard_lane(x, classes["target_point"]),
         "HeightShelf": lambda x: build_height_shelf(x, classes["target_point"]),
         "SlickCross": lambda x: build_slick_cross(x, classes["target_point"], classes["friction"]),
-        "BossRing": lambda x: build_boss_ring(x, classes["target_point"]),
+        "BossRing": lambda x: build_boss_ring(
+            x, classes["target_point"], classes["friction"]),
         "Extraction": lambda x: build_extraction(
             x, classes["extraction"], classes["contract_exit"]),
     }
@@ -262,7 +272,8 @@ def main(seed=SEED):
         log("module[%d]=%s center_x=%.0f" % (index, module_name, center_x))
 
     build_navmesh(classes["navmesh"], len(sequence))
-    if len(ENCOUNTER_WAVES) != 2 or BOSS_SPAWN_POINT is None:
+    if (len(ENCOUNTER_WAVES) != 2 or BOSS_SPAWN_POINT is None
+            or BOSS_OVERLOAD_FRICTION_ZONE is None):
         raise RuntimeError(
             "runtime encounter wiring incomplete: waves=%d boss=%s"
             % (len(ENCOUNTER_WAVES), BOSS_SPAWN_POINT))
@@ -277,6 +288,8 @@ def main(seed=SEED):
     director.set_editor_property("encounter_wave_two_spawns", ENCOUNTER_WAVES[1])
     director.set_editor_property("boss_spawn_point", BOSS_SPAWN_POINT)
     director.set_editor_property("boss_add_spawn_points", BOSS_ADD_SPAWN_POINTS)
+    director.set_editor_property(
+        "boss_overload_friction_zone", BOSS_OVERLOAD_FRICTION_ZONE)
     log("layout: " + library.describe_layout(seed))
     log("SUCCESS: deterministic PCG route built with sequential 8+8+Boss waves; Build Paths before Play")
 

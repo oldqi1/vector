@@ -28,7 +28,7 @@ AVectorLowFrictionZone::AVectorLowFrictionZone()
 void AVectorLowFrictionZone::Tick(const float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-	if (bDrawDebugBounds && GetWorld() && ZoneBounds)
+	if (bZoneActive && bDrawDebugBounds && GetWorld() && ZoneBounds)
 	{
 		DrawDebugBox(
 			GetWorld(),
@@ -48,6 +48,11 @@ void AVectorLowFrictionZone::BeginPlay()
 	Super::BeginPlay();
 	ZoneBounds->OnComponentBeginOverlap.AddDynamic(this, &AVectorLowFrictionZone::HandleBeginOverlap);
 	ZoneBounds->OnComponentEndOverlap.AddDynamic(this, &AVectorLowFrictionZone::HandleEndOverlap);
+	if (!bStartActive)
+	{
+		SetZoneActive(false);
+		return;
+	}
 
 	// 兼容 Play 开始时已经位于区域内的角色。
 	TArray<AActor*> InitiallyOverlappingActors;
@@ -62,6 +67,45 @@ void AVectorLowFrictionZone::BeginPlay()
 }
 
 void AVectorLowFrictionZone::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	RestoreAllAffectedMovement();
+	Super::EndPlay(EndPlayReason);
+}
+
+void AVectorLowFrictionZone::SetZoneActive(const bool bActive)
+{
+	if (bZoneActive == bActive || !ZoneBounds)
+	{
+		return;
+	}
+	bZoneActive = bActive;
+	SetActorTickEnabled(bZoneActive);
+	ZoneBounds->SetCollisionEnabled(
+		bZoneActive ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+	ZoneBounds->SetGenerateOverlapEvents(bZoneActive);
+	if (!bZoneActive)
+	{
+		RestoreAllAffectedMovement();
+	}
+	else
+	{
+		TArray<AActor*> OverlappingActors;
+		ZoneBounds->GetOverlappingActors(OverlappingActors);
+		for (AActor* Actor : OverlappingActors)
+		{
+			if (Actor)
+			{
+				ApplyLowFriction(Actor->FindComponentByClass<UCharacterMovementComponent>());
+			}
+		}
+	}
+	UE_LOG(LogVectorEnvironment, Log,
+		TEXT("Low friction zone state: actor=%s active=%s affected=%d"),
+		*GetName(), bZoneActive ? TEXT("YES") : TEXT("no"),
+		OriginalSettings.Num() + ActiveModifierComponents.Num());
+}
+
+void AVectorLowFrictionZone::RestoreAllAffectedMovement()
 {
 	for (const TWeakObjectPtr<UVectorPhysicsModifierComponent>& Modifier : ActiveModifierComponents)
 	{
@@ -82,7 +126,6 @@ void AVectorLowFrictionZone::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		}
 	}
 	OriginalSettings.Empty();
-	Super::EndPlay(EndPlayReason);
 }
 
 void AVectorLowFrictionZone::HandleBeginOverlap(
@@ -93,7 +136,7 @@ void AVectorLowFrictionZone::HandleBeginOverlap(
 	const bool bFromSweep,
 	const FHitResult& SweepResult)
 {
-	if (OtherActor)
+	if (bZoneActive && OtherActor)
 	{
 		ApplyLowFriction(OtherActor->FindComponentByClass<UCharacterMovementComponent>());
 	}

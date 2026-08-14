@@ -5,6 +5,7 @@
 #include "Boss/VectorPhysicsBoss.h"
 #include "Combat/VectorEnemy.h"
 #include "Engine/World.h"
+#include "Environment/VectorLowFrictionZone.h"
 #include "Hunt/VectorEncounterComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "VectorGameMode.h"
@@ -35,6 +36,22 @@ void AVectorPCGEncounterDirector::BeginPlay()
 	Encounter->OnEncounterProgress.AddUniqueDynamic(
 		this, &AVectorPCGEncounterDirector::HandleEncounterProgress);
 	SpawnNextWave();
+}
+
+void AVectorPCGEncounterDirector::HandleBossPhaseChanged(
+	const EVectorPhysicsBossPhase PreviousPhase,
+	const EVectorPhysicsBossPhase CurrentPhase)
+{
+	if (!BossOverloadFrictionZone)
+	{
+		return;
+	}
+	const bool bEnable = CurrentPhase == EVectorPhysicsBossPhase::Overload;
+	BossOverloadFrictionZone->SetZoneActive(bEnable);
+	UE_LOG(LogVectorPCGEncounter, Log,
+		TEXT("PCG BossRing friction: previous=%d current=%d active=%s"),
+		static_cast<int32>(PreviousPhase), static_cast<int32>(CurrentPhase),
+		bEnable ? TEXT("YES") : TEXT("no"));
 }
 
 void AVectorPCGEncounterDirector::HandleEncounterProgress(
@@ -121,6 +138,8 @@ int32 AVectorPCGEncounterDirector::SpawnBossWave()
 	int32 SpawnedCount = 0;
 	if (AVectorPhysicsBoss* Boss = SpawnBossAt(BossSpawnPoint))
 	{
+		Boss->OnBossPhaseChanged.AddUniqueDynamic(
+			this, &AVectorPCGEncounterDirector::HandleBossPhaseChanged);
 		if (Encounter->RegisterSpawnedEnemy(Boss))
 		{
 			++SpawnedCount;
