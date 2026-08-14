@@ -29,6 +29,9 @@ private:
 	UFUNCTION()
 	void UnlockExit();
 
+	UFUNCTION()
+	void HandleEncounterProgress(int32 RemainingEnemies, int32 TotalEnemies);
+
 	UPROPERTY(VisibleAnywhere, Category = "Vector|Hunt")
 	TObjectPtr<UBoxComponent> Blocker;
 
@@ -39,4 +42,5 @@ private:
 	TObjectPtr<UPointLightComponent> StatusLight;
 
 	bool bUnlocked = false;
+	bool bLockedStateLogged = false;
 };

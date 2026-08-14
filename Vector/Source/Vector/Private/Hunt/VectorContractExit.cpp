@@ -69,16 +69,36 @@ void AVectorContractExit::BindToEncounter()
 	}
 
 	Encounter->OnEncounterCompleted.AddUniqueDynamic(this, &AVectorContractExit::UnlockExit);
+	Encounter->OnEncounterProgress.AddUniqueDynamic(
+		this, &AVectorContractExit::HandleEncounterProgress);
 	if (Encounter->IsComplete())
 	{
 		UnlockExit();
 	}
+	else if (Encounter->GetEncounterState() == EVectorEncounterState::Active)
+	{
+		HandleEncounterProgress(
+			Encounter->GetRemainingEnemies(), Encounter->GetTotalEnemies());
+	}
 	else
 	{
-		UE_LOG(LogVectorContractExit, Log,
-			TEXT("Contract exit locked: exit=%s remaining=%d"),
-			*GetName(), Encounter->GetRemainingEnemies());
+		UE_LOG(LogVectorContractExit, Verbose,
+			TEXT("Contract exit waiting for encounter registration: exit=%s"), *GetName());
 	}
+}
+
+void AVectorContractExit::HandleEncounterProgress(
+	const int32 RemainingEnemies,
+	const int32 TotalEnemies)
+{
+	if (bUnlocked || bLockedStateLogged || TotalEnemies <= 0)
+	{
+		return;
+	}
+	bLockedStateLogged = true;
+	UE_LOG(LogVectorContractExit, Log,
+		TEXT("Contract exit locked: exit=%s remaining=%d total=%d"),
+		*GetName(), RemainingEnemies, TotalEnemies);
 }
 
 void AVectorContractExit::UnlockExit()
