@@ -49,7 +49,10 @@ try {
         @{ Path = "Vector/Source/Vector/Private/Hunt/VectorEncounterComponent.cpp"; Text = "OnEncounterCompleted.Broadcast" },
         @{ Path = "Vector/Source/Vector/Private/Hunt/VectorExtractionZone.cpp"; Text = "Hunt run summary" },
         @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "EXIT LOCKED - CLEAR ALL" },
-        @{ Path = "Tools/Greybox/setup_greybox_arena.py"; Text = "GA_ExtractionZone" }
+        @{ Path = "Tools/Greybox/setup_greybox_arena.py"; Text = "GA_ExtractionZone" },
+        @{ Path = "Vector/Source/Vector/Private/PCG/VectorTacticalGenerationLibrary.cpp"; Text = "FVectorTacticalGenerator::Generate" },
+        @{ Path = "Tools/Greybox/setup_tactical_pcg_preview.py"; Text = "generate_module_sequence" },
+        @{ Path = "Tools/Greybox/setup_tactical_pcg_preview.py"; Text = "BossRing_BossSpawn" }
     )
     foreach ($Requirement in $RequiredWiring) {
         $Content = Get-Content -Raw -LiteralPath $Requirement.Path
