@@ -56,13 +56,14 @@ def resolve_dependencies():
     dependencies = {
         "enemy_class": load_native_class("/Script/Vector.VectorEnemy"),
         "contract_exit_class": load_native_class("/Script/Vector.VectorContractExit"),
+        "extraction_zone_class": load_native_class("/Script/Vector.VectorExtractionZone"),
         "game_mode_class": load_native_class("/Script/Vector.VectorGameMode"),
         "player_start_class": load_native_class("/Script/Engine.PlayerStart"),
         "low_friction_zone_class": load_native_class("/Script/Vector.VectorLowFrictionZone"),
         "navmesh_class": load_native_class("/Script/NavigationSystem.NavMeshBoundsVolume"),
         "archetypes": resolve_enemy_archetypes(),
     }
-    log("preflight passed: player, game mode, enemies, contract exit, archetypes, friction zone, and navmesh resolved")
+    log("preflight passed: player, game mode, enemies, contract exit, extraction zone, archetypes, friction zone, and navmesh resolved")
     return dependencies
 
 def clear_previous(level_actor_subsystem):
@@ -167,6 +168,16 @@ def spawn_contract_exit(contract_exit_class):
     log("spawned contract exit: west opening=(-4000,0), locked until 10/10 enemies defeated")
     return actor
 
+def spawn_extraction_zone(extraction_zone_class):
+    """Place the run-completion trigger on the platform beyond the west gate."""
+    actor = get_editor_subsystem().spawn_actor_from_class(
+        extraction_zone_class, unreal.Vector(-4450.0, 0.0, 140.0))
+    if actor is None:
+        raise RuntimeError("failed to spawn VectorExtractionZone")
+    actor.set_actor_label("GA_ExtractionZone")
+    log("spawned extraction zone: beyond west gate=(-4450,0)")
+    return actor
+
 def spawn_enemy(enemy_class, archetype_name, archetype_enum, location, label):
     """生成一只敌人并按三型配置。"""
     actor = get_editor_subsystem().spawn_actor_from_class(
@@ -226,6 +237,7 @@ def main():
     spawn_player_start(dependencies["player_start_class"])
     spawn_low_friction_zone(dependencies["low_friction_zone_class"])
     spawn_contract_exit(dependencies["contract_exit_class"])
+    spawn_extraction_zone(dependencies["extraction_zone_class"])
     spawn_enemies(dependencies["enemy_class"], dependencies["archetypes"])
     spawn_navmesh(dependencies["navmesh_class"])
     log("SUCCESS: arena generated with PlayerStart, 10 enemies, active low-friction zone, and west contract exit. Build Paths, then Play.")

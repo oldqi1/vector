@@ -35,7 +35,7 @@ Vector/
 │   │   ├── Public/Combat/      # 冲量锤/碰撞连锁/生命/敌人三型/动作状态机
 │   │   ├── Public/Stability/   # 稳定/失衡账本（纯 C++ 可测）
 │   │   ├── Public/Impact/      # 碰撞伤害数学（纯函数）
-│   │   └── Private/Tests/      # Automation 测试（29 项）
+│   │   └── Private/Tests/      # Automation 测试（30 项）
 │   ├── Content/Prototype/      # 灰盒地图 + SK_Robot 机器人占位
 │   └── Config/
 ├── Design/原型设计基线_v0.1.md # 轻量设计基线（三项门槛/10 条验收/布局）

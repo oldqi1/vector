@@ -10,6 +10,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	FVectorOrganCountChangedSignature,
 	int32, NewTotal,
 	int32, Delta);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FVectorHuntExtractionCompletedSignature,
+	int32, SecuredOrgans);
 
 /** Run-level greybox hunt ledger. Permanent crafting remains outside prototype scope. */
 UCLASS(ClassGroup = (Hunt), meta = (BlueprintSpawnableComponent))
@@ -25,13 +28,31 @@ public:
 
 	void ResetProgress();
 
+	/** Finalizes this run once and snapshots the secured organ count. */
+	bool CompleteExtraction();
+
 	UFUNCTION(BlueprintPure, Category = "Vector|Hunt")
 	int32 GetCollectedOrgans() const { return CollectedOrgans; }
+
+	UFUNCTION(BlueprintPure, Category = "Vector|Hunt")
+	bool IsExtractionComplete() const { return bExtractionComplete; }
+
+	UFUNCTION(BlueprintPure, Category = "Vector|Hunt")
+	int32 GetSecuredOrgans() const { return SecuredOrgans; }
 
 	UPROPERTY(BlueprintAssignable, Category = "Vector|Hunt")
 	FVectorOrganCountChangedSignature OnOrganCountChanged;
 
+	UPROPERTY(BlueprintAssignable, Category = "Vector|Hunt")
+	FVectorHuntExtractionCompletedSignature OnExtractionCompleted;
+
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Vector|Hunt")
 	int32 CollectedOrgans = 0;
+
+	UPROPERTY(VisibleAnywhere, Category = "Vector|Hunt")
+	int32 SecuredOrgans = 0;
+
+	UPROPERTY(VisibleAnywhere, Category = "Vector|Hunt")
+	bool bExtractionComplete = false;
 };

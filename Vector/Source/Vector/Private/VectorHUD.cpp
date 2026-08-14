@@ -39,6 +39,16 @@ void AVectorHUD::DrawHUD()
 					FLinearColor(0.25f, 1.0f, 0.4f),
 					40.0f, 36.0f,
 					GEngine->GetMediumFont(), 1.0f, false);
+				if (Hunt->IsExtractionComplete())
+				{
+					DrawText(
+						FString::Printf(TEXT("HUNT COMPLETE - ORGANS SECURED: %d"),
+							Hunt->GetSecuredOrgans()),
+						FLinearColor(0.15f, 1.0f, 0.35f),
+						Canvas->ClipX * 0.5f - 230.0f,
+						Canvas->ClipY * 0.28f,
+						GEngine->GetLargeFont(), 1.0f, false);
+				}
 			}
 			if (const UVectorEncounterComponent* Encounter = GameMode
 				? GameMode->Encounter : nullptr)
