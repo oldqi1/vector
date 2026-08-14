@@ -59,6 +59,8 @@ try {
         @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "MAGNET-SHELL BEAST" },
         @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "WAVE %d / 3" },
         @{ Path = "Vector/Source/Vector/Private/Boss/VectorPhysicsBoss.cpp"; Text = "QueueDirectionalVelocityOverride" },
+        @{ Path = "Vector/Source/Vector/Private/Boss/VectorPhysicsBoss.cpp"; Text = "Boss slam landed" },
+        @{ Path = "Vector/Source/Vector/Private/Gameplay/VectorCharacterMovementComponent.cpp"; Text = "OnLandedWithImpact" },
         @{ Path = "Tools/Greybox/setup_physics_boss_test.py"; Text = "/Script/Vector.VectorPhysicsBoss" }
     )
     foreach ($Requirement in $RequiredWiring) {

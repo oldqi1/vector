@@ -6,6 +6,7 @@
 #include "Combat/VectorHealthComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -148,14 +149,37 @@ void AVectorPhysicsBoss::LaunchRam()
 
 void AVectorPhysicsBoss::AdvanceRam(const double DeltaSeconds)
 {
+	if (RamPhase == ERamPhase::SlamTelegraph && GetWorld())
+	{
+		DrawDebugCircle(
+			GetWorld(), GetActorLocation() + FVector(0.0, 0.0, 8.0), 400.0,
+			48, FColor::Red, false, 0.05f, 0, 10.0f,
+			FVector::ForwardVector, FVector::RightVector, false);
+	}
+	if (RamPhase == ERamPhase::SlamAirborne)
+	{
+		const UCharacterMovementComponent* CharacterMovement = GetCharacterMovement();
+		const bool bHasLeftGround = RamPhaseSecondsRemaining
+			< FMath::Max(0.1, SlamMaximumAirborneSeconds) - 0.1;
+		if (bHasLeftGround && CharacterMovement && CharacterMovement->IsMovingOnGround())
+		{
+			RamPhase = ERamPhase::Recovery;
+			RamPhaseSecondsRemaining = BossState.GetRecoverySeconds();
+			UE_LOG(LogVectorBoss, Log,
+				TEXT("Boss slam landed: actor=%s recovery=%.2fs (landing shock uses unified impact component)"),
+				*GetName(), RamPhaseSecondsRemaining);
+			return;
+		}
+	}
+
 	if (StabilityComponent && StabilityComponent->IsStaggered())
 	{
-		if (RamPhase == ERamPhase::Telegraph)
+		if (RamPhase == ERamPhase::Telegraph || RamPhase == ERamPhase::SlamTelegraph)
 		{
 			SetAttackWarningPresentation(false);
 			RamPhase = ERamPhase::Recovery;
 			RamPhaseSecondsRemaining = BossState.GetRecoverySeconds();
-			UE_LOG(LogVectorBoss, Log, TEXT("Boss ram interrupted by stagger: actor=%s"), *GetName());
+			UE_LOG(LogVectorBoss, Log, TEXT("Boss attack telegraph interrupted by stagger: actor=%s"), *GetName());
 		}
 		return;
 	}
@@ -173,7 +197,18 @@ void AVectorPhysicsBoss::AdvanceRam(const double DeltaSeconds)
 		{
 			if (FVector::Dist2D(GetActorLocation(), PlayerPawn->GetActorLocation()) <= RamTriggerRangeCm)
 			{
-				BeginRamTelegraph();
+				if (BossState.GetPhase() != EVectorPhysicsBossPhase::AnchoredShell
+					&& bUseSlamForNextAttack)
+				{
+					BeginSlamTelegraph();
+					bUseSlamForNextAttack = false;
+				}
+				else
+				{
+					BeginRamTelegraph();
+					bUseSlamForNextAttack =
+						BossState.GetPhase() != EVectorPhysicsBossPhase::AnchoredShell;
+				}
 				return;
 			}
 		}
@@ -182,10 +217,20 @@ void AVectorPhysicsBoss::AdvanceRam(const double DeltaSeconds)
 	case ERamPhase::Telegraph:
 		LaunchRam();
 		break;
+	case ERamPhase::SlamTelegraph:
+		LaunchSlam();
+		break;
 	case ERamPhase::Active:
 		RamPhase = ERamPhase::Recovery;
 		RamPhaseSecondsRemaining = BossState.GetRecoverySeconds();
 		UE_LOG(LogVectorBoss, Log, TEXT("Boss ram recovery: actor=%s duration=%.2fs"),
+			*GetName(), RamPhaseSecondsRemaining);
+		break;
+	case ERamPhase::SlamAirborne:
+		RamPhase = ERamPhase::Recovery;
+		RamPhaseSecondsRemaining = BossState.GetRecoverySeconds();
+		UE_LOG(LogVectorBoss, Warning,
+			TEXT("Boss slam airborne timeout: actor=%s recovery=%.2fs"),
 			*GetName(), RamPhaseSecondsRemaining);
 		break;
 	case ERamPhase::Recovery:
@@ -197,6 +242,40 @@ void AVectorPhysicsBoss::AdvanceRam(const double DeltaSeconds)
 	default:
 		break;
 	}
+}
+
+void AVectorPhysicsBoss::BeginSlamTelegraph()
+{
+	RamPhase = ERamPhase::SlamTelegraph;
+	RamPhaseSecondsRemaining = FMath::Max(0.01, SlamTelegraphSeconds);
+	SetAttackWarningPresentation(true);
+	UE_LOG(LogVectorBoss, Log,
+		TEXT("Boss slam telegraph: actor=%s duration=%.2fs radius=400 mass=%.1f"),
+		*GetName(), RamPhaseSecondsRemaining, BossState.GetEffectivePhysicalMass());
+}
+
+void AVectorPhysicsBoss::LaunchSlam()
+{
+	SetAttackWarningPresentation(false);
+	bool bQueued = false;
+	if (UVectorCharacterMovementComponent* Movement =
+		FindComponentByClass<UVectorCharacterMovementComponent>())
+	{
+		bQueued = Movement->QueueDirectionalVelocityOverride(
+			FVector::UpVector, SlamLaunchSpeedCmPerSecond);
+		if (bQueued)
+		{
+			Movement->SetMovementMode(MOVE_Falling);
+		}
+	}
+	RamPhase = bQueued ? ERamPhase::SlamAirborne : ERamPhase::Recovery;
+	RamPhaseSecondsRemaining = bQueued
+		? FMath::Max(0.1, SlamMaximumAirborneSeconds)
+		: BossState.GetRecoverySeconds();
+	UE_LOG(LogVectorBoss, Log,
+		TEXT("Boss slam launch: actor=%s queued=%s verticalSpeed=%.0f mode=%s"),
+		*GetName(), bQueued ? TEXT("OK") : TEXT("REJECTED"),
+		SlamLaunchSpeedCmPerSecond, bQueued ? TEXT("Falling") : TEXT("Recovery"));
 }
 
 void AVectorPhysicsBoss::ApplyPhaseOutputs(const EVectorPhysicsBossPhase PreviousPhase)

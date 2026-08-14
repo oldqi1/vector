@@ -45,12 +45,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Ram", meta = (ClampMin = "0.01", Units = "s"))
 	double RamActiveSeconds = 0.75;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Slam", meta = (ClampMin = "0.01", Units = "s"))
+	double SlamTelegraphSeconds = 0.95;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Slam", meta = (ClampMin = "0.0", Units = "cm/s"))
+	double SlamLaunchSpeedCmPerSecond = 850.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Slam", meta = (ClampMin = "0.1", Units = "s"))
+	double SlamMaximumAirborneSeconds = 2.5;
+
 private:
 	enum class ERamPhase : uint8
 	{
 		Waiting,
 		Telegraph,
 		Active,
+		SlamTelegraph,
+		SlamAirborne,
 		Recovery,
 	};
 
@@ -62,6 +73,8 @@ private:
 
 	void BeginRamTelegraph();
 	void LaunchRam();
+	void BeginSlamTelegraph();
+	void LaunchSlam();
 	void AdvanceRam(double DeltaSeconds);
 	void ApplyPhaseOutputs(EVectorPhysicsBossPhase PreviousPhase);
 	void UpdateBossPresentation();
@@ -71,4 +84,5 @@ private:
 	ERamPhase RamPhase = ERamPhase::Waiting;
 	double RamPhaseSecondsRemaining = 1.5;
 	FVector LockedRamDirection = FVector::ForwardVector;
+	bool bUseSlamForNextAttack = false;
 };
