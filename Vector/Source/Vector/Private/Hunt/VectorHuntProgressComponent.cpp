@@ -13,14 +13,14 @@ int32 UVectorHuntProgressComponent::CollectOrgans(const int32 Amount)
 {
 	if (bExtractionComplete)
 	{
-		UE_LOG(LogVectorHunt, Warning,
+		UE_LOG(LogVectorHunt, Verbose,
 			TEXT("Organ collection rejected: hunt already extracted amount=%d secured=%d"),
 			Amount, SecuredOrgans);
 		return CollectedOrgans;
 	}
 	if (Amount <= 0)
 	{
-		UE_LOG(LogVectorHunt, Warning,
+		UE_LOG(LogVectorHunt, Verbose,
 			TEXT("Organ collection rejected: amount=%d total=%d"),
 			Amount, CollectedOrgans);
 		return CollectedOrgans;
