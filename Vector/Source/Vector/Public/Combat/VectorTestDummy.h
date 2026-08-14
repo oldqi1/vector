@@ -41,6 +41,9 @@ public:
 	/** 调质器颜色状态：润滑=蓝、浮空=青、同时存在=亮青。 */
 	void SetPhysicsModifierPresentation(bool bLubricated, bool bBuoyant);
 
+	/** Short independent yellow pulse confirming a lift-fork target acquisition. */
+	void TriggerLiftForkPresentation();
+
 	/** 质量三档：决定被推难度与稳定度/碰撞系数。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|TestDummy")
 	EVectorMassClass MassClass = EVectorMassClass::Medium;
@@ -71,6 +74,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|TestDummy|Presentation")
 	TObjectPtr<UPointLightComponent> AttackWarningLight;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|TestDummy|Presentation")
+	TObjectPtr<UPointLightComponent> LiftForkLight;
+
 protected:
 	/** 按质量档应用方块颜色与缩放（派生类可在质量档变更后重调）。 */
 	virtual void ApplyMassPresentation();
@@ -90,4 +96,5 @@ protected:
 	bool bAttackWarningActive = false;
 	bool bLubricatedPresentation = false;
 	bool bBuoyantPresentation = false;
+	double LiftForkFlashSecondsRemaining = 0.0;
 };

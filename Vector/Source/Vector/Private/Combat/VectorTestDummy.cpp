@@ -62,6 +62,14 @@ AVectorTestDummy::AVectorTestDummy(const FObjectInitializer& ObjectInitializer)
 	AttackWarningLight->SetCastShadows(false);
 	AttackWarningLight->SetVisibility(false);
 
+	LiftForkLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("LiftForkLight"));
+	LiftForkLight->SetupAttachment(GetCapsuleComponent());
+	LiftForkLight->SetRelativeLocation(FVector(0.0, 0.0, 110.0));
+	LiftForkLight->SetLightColor(FLinearColor(1.0f, 0.82f, 0.05f));
+	LiftForkLight->SetIntensity(0.0f);
+	LiftForkLight->SetAttenuationRadius(420.0f);
+	LiftForkLight->SetVisibility(true);
+
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMeshFinder(
 		TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (CubeMeshFinder.Succeeded())
@@ -88,7 +96,23 @@ void AVectorTestDummy::BeginPlay()
 void AVectorTestDummy::Tick(const float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (LiftForkFlashSecondsRemaining > 0.0)
+	{
+		LiftForkFlashSecondsRemaining = FMath::Max(
+			0.0, LiftForkFlashSecondsRemaining - FMath::Max(0.0f, DeltaSeconds));
+		const double Ratio = FMath::Clamp(LiftForkFlashSecondsRemaining / 0.45, 0.0, 1.0);
+		LiftForkLight->SetIntensity(static_cast<float>(7000.0 * Ratio));
+	}
 	UpdateStaggerPresentation();
+}
+
+void AVectorTestDummy::TriggerLiftForkPresentation()
+{
+	LiftForkFlashSecondsRemaining = 0.45;
+	if (LiftForkLight)
+	{
+		LiftForkLight->SetIntensity(7000.0f);
+	}
 }
 
 void AVectorTestDummy::UpdateStaggerPresentation()

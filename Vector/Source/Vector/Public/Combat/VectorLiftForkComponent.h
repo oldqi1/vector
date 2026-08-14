@@ -7,7 +7,7 @@
 #include "Combat/VectorActionTypes.h"
 #include "VectorLiftForkComponent.generated.h"
 
-/** R 键升空叉：对前方最近目标施加按质量折算的垂直目标速度。 */
+/** Equipment slot 5 lift fork: applies a mass-scaled vertical target speed. */
 UCLASS(ClassGroup = (Combat), meta = (BlueprintSpawnableComponent))
 class VECTOR_API UVectorLiftForkComponent : public UActorComponent
 {
@@ -32,10 +32,10 @@ public:
 	double StabilityDamage = 20.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|LiftFork", meta = (ClampMin = "0.0", Units = "cm"))
-	double ReachCm = 360.0;
+	double ReachCm = 650.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|LiftFork", meta = (ClampMin = "0.0", Units = "cm"))
-	double RadiusCm = 140.0;
+	double RadiusCm = 170.0;
 
 private:
 	void ReleaseActionLock();

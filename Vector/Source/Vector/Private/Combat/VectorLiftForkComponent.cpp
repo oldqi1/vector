@@ -4,6 +4,7 @@
 
 #include "Combat/VectorActionLockComponent.h"
 #include "Combat/VectorCombatTargeting.h"
+#include "Combat/VectorTestDummy.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 #include "Gameplay/VectorCharacterMovementComponent.h"
@@ -47,14 +48,27 @@ void UVectorLiftForkComponent::ActivateFork()
 		UE_LOG(LogVectorLiftFork, Log, TEXT("Lift fork REJECTED: own action busy"));
 		return;
 	}
-	AActor* Target = FVectorCombatTargeting::FindNearestMovableStableTarget(
-		GetOwner(),
-		FVectorCombatTargeting::ComputeCursorGroundAimDirection(GetOwner()),
+	bool bUsedCursor = false;
+	const FVector AimDirection = FVectorCombatTargeting::ComputeCursorGroundAimDirection(
+		GetOwner(), &bUsedCursor);
+	AActor* Target = FVectorCombatTargeting::FindMostAlignedMovableStableTarget(
+		GetOwner(), AimDirection,
 		ReachCm,
 		RadiusCm);
 	if (!Target)
 	{
-		UE_LOG(LogVectorLiftFork, Log, TEXT("Lift fork: NO valid target"));
+		if (GetWorld() && GetOwner())
+		{
+			const FVector Start = GetOwner()->GetActorLocation();
+			const FVector End = Start + AimDirection * ReachCm;
+			DrawDebugLine(GetWorld(), Start, End, FColor::Red, false, 0.45f, 0, 6.0f);
+			DrawDebugSphere(GetWorld(), End, static_cast<float>(RadiusCm), 20,
+				FColor::Red, false, 0.45f, 0, 3.0f);
+		}
+		UE_LOG(LogVectorLiftFork, Log,
+			TEXT("Lift fork: NO valid target aim=%s source=%s range=%.0f radius=%.0f"),
+			*AimDirection.ToCompactString(), bUsedCursor ? TEXT("mouse") : TEXT("fallback"),
+			ReachCm, RadiusCm);
 		return;
 	}
 	UVectorCharacterMovementComponent* Movement =
@@ -88,11 +102,31 @@ void UVectorLiftForkComponent::ActivateFork()
 	const double Mass = Stability->GetEffectivePhysicalMass();
 	const double VerticalSpeed = FVectorImpactMath::ComputeMassAdjustedSpeed(
 		VerticalImpulseBaseSpeedCmPerSecond, Mass);
-	// Walking 会把 Z 速度投影回地面；先进入 Falling，再由统一速度队列注入垂直分量。
-	Movement->SetMovementMode(MOVE_Falling);
+	// Queue first so any movement-mode transition observes the target as impulse-driven
+	// and cannot clear it through an AI/path-following stop request.
 	const bool bQueued = Movement->QueueDirectionalVelocityOverride(FVector::UpVector, VerticalSpeed);
+	if (!bQueued)
+	{
+		Timeline.Reset();
+		ReleaseActionLock();
+		UE_LOG(LogVectorLiftFork, Warning,
+			TEXT("Lift fork REJECTED: velocity queue target=%s speed=%.0f"),
+			*Target->GetName(), VerticalSpeed);
+		return;
+	}
+	// Walking projects Z velocity onto the floor; enter Falling after the queue is armed.
+	Movement->SetMovementMode(MOVE_Falling);
+	if (AVectorTestDummy* Dummy = Cast<AVectorTestDummy>(Target))
+	{
+		Dummy->TriggerLiftForkPresentation();
+	}
 	if (GetWorld())
 	{
+		if (GetOwner())
+		{
+			DrawDebugLine(GetWorld(), GetOwner()->GetActorLocation(), Target->GetActorLocation(),
+				FColor::Yellow, false, 0.45f, 0, 8.0f);
+		}
 		DrawDebugDirectionalArrow(
 			GetWorld(),
 			Target->GetActorLocation(),
@@ -105,9 +139,10 @@ void UVectorLiftForkComponent::ActivateFork()
 			8.0f);
 	}
 	UE_LOG(LogVectorLiftFork, Log,
-		TEXT("Lift fork hit: target=%s mass=%.2f verticalSpeed=%.0f stabilityDamage=%.1f queued=%s"),
+		TEXT("Lift fork hit: target=%s mass=%.2f verticalSpeed=%.0f stabilityDamage=%.1f queued=%s aimSource=%s mode=%s"),
 		*Target->GetName(), Mass, VerticalSpeed, AppliedStabilityDamage,
-		bQueued ? TEXT("OK") : TEXT("REJECTED"));
+		TEXT("OK"), bUsedCursor ? TEXT("mouse") : TEXT("fallback"),
+		*Movement->GetMovementName());
 }
 
 void UVectorLiftForkComponent::CancelAction()
