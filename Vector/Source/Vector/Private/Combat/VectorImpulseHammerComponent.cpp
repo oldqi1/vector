@@ -31,7 +31,7 @@ namespace
 	}
 
 	/** 世界级击杀归因账本（GameMode 持有；无则返回 nullptr，不影响玩法）。 */
-	UVectorKillAttributionComponent* FindKillAttribution(const UWorld* World)
+	UVectorKillAttributionComponent* FindHammerKillAttribution(const UWorld* World)
 	{
 		if (!World)
 		{
@@ -257,7 +257,7 @@ void UVectorImpulseHammerComponent::ApplyImpulseToHitActors(const FVector& Direc
 		const bool bKilled = Health->ApplyDamage(HealthDamage);
 		if (bKilled)
 		{
-			if (UVectorKillAttributionComponent* Attribution = FindKillAttribution(GetWorld()))
+			if (UVectorKillAttributionComponent* Attribution = FindHammerKillAttribution(GetWorld()))
 			{
 				Attribution->RecordKill(EVectorKillCause::Hammer);
 			}
