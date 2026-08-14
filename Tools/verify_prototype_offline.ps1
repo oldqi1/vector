@@ -56,6 +56,8 @@ try {
         @{ Path = "Tools/Greybox/setup_tactical_pcg_preview.py"; Text = "encounter_wave_one_spawns" },
         @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGEncounterDirector.cpp"; Text = "BeginDynamicEncounter" },
         @{ Path = "Vector/Source/Vector/Private/PCG/VectorPCGEncounterDirector.cpp"; Text = "SealDynamicEncounter" },
+        @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "MAGNET-SHELL BEAST" },
+        @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "WAVE %d / 3" },
         @{ Path = "Vector/Source/Vector/Private/Boss/VectorPhysicsBoss.cpp"; Text = "QueueDirectionalVelocityOverride" },
         @{ Path = "Tools/Greybox/setup_physics_boss_test.py"; Text = "/Script/Vector.VectorPhysicsBoss" }
     )

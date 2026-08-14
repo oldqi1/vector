@@ -2,6 +2,7 @@
 
 #include "VectorHUD.h"
 
+#include "Boss/VectorPhysicsBoss.h"
 #include "Combat/VectorActionLockComponent.h"
 #include "Combat/VectorGravityHookComponent.h"
 #include "Combat/VectorHealthComponent.h"
@@ -15,6 +16,7 @@
 #include "Hunt/VectorEncounterComponent.h"
 #include "Hunt/VectorHuntProgressComponent.h"
 #include "Physics/VectorPhysicsModifierComponent.h"
+#include "PCG/VectorPCGEncounterDirector.h"
 #include "VectorCharacter.h"
 #include "VectorGameMode.h"
 
@@ -220,6 +222,59 @@ void AVectorHUD::DrawHUD()
 	if (!World)
 	{
 		return;
+	}
+
+	if (GEngine)
+	{
+		for (TActorIterator<AVectorPCGEncounterDirector> It(World); It; ++It)
+		{
+			const AVectorPCGEncounterDirector* Director = *It;
+			if (!Director)
+			{
+				continue;
+			}
+			DrawText(
+				FString::Printf(TEXT("SEED %d  |  WAVE %d / 3"),
+					Director->GetGenerationSeed(), Director->GetActiveWaveNumber()),
+				FLinearColor(0.3f, 0.85f, 1.0f),
+				Canvas->ClipX - 260.0f, 36.0f,
+				GEngine->GetMediumFont(), 0.9f, false);
+			break;
+		}
+
+		for (TActorIterator<AVectorPhysicsBoss> It(World); It; ++It)
+		{
+			const AVectorPhysicsBoss* Boss = *It;
+			const UVectorHealthComponent* BossHealth = Boss
+				? Boss->FindComponentByClass<UVectorHealthComponent>() : nullptr;
+			if (!Boss || !BossHealth || BossHealth->IsDead())
+			{
+				continue;
+			}
+
+			FString PhaseLabel = TEXT("ANCHORED");
+			switch (Boss->GetBossPhase())
+			{
+			case EVectorPhysicsBossPhase::ExposedShell:
+				PhaseLabel = TEXT("EXPOSED");
+				break;
+			case EVectorPhysicsBossPhase::Overload:
+				PhaseLabel = TEXT("OVERLOAD");
+				break;
+			case EVectorPhysicsBossPhase::Defeated:
+				PhaseLabel = TEXT("DEFEATED");
+				break;
+			case EVectorPhysicsBossPhase::AnchoredShell:
+			default:
+				break;
+			}
+			DrawHealthBar(
+				Canvas->ClipX * 0.5f - 260.0f, 34.0f,
+				520.0f, 24.0f,
+				BossHealth->GetHealth(), BossHealth->GetMaxHealth(),
+				FString::Printf(TEXT("MAGNET-SHELL BEAST  [%s]"), *PhaseLabel), true);
+			break;
+		}
 	}
 
 	if (GEngine)

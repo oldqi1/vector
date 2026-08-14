@@ -20,6 +20,18 @@ public:
 	AVectorPCGEncounterDirector();
 	virtual void BeginPlay() override;
 
+	UFUNCTION(BlueprintPure, Category = "Vector|PCG|Encounter")
+	int32 GetGenerationSeed() const { return GenerationSeed; }
+
+	UFUNCTION(BlueprintPure, Category = "Vector|PCG|Encounter")
+	int32 GetActiveWaveNumber() const { return FMath::Clamp(NextWaveIndex, 0, 3); }
+
+	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
+	int32 GenerationSeed = 0;
+
+	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
+	TArray<FString> ModuleSequence;
+
 	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
 	TArray<TObjectPtr<AActor>> EncounterWaveOneSpawns;
 

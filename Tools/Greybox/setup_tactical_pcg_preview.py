@@ -271,6 +271,8 @@ def main(seed=SEED):
     if director is None:
         raise RuntimeError("failed to spawn PCG encounter director")
     director.set_actor_label(PREFIX + "EncounterDirector")
+    director.set_editor_property("generation_seed", seed)
+    director.set_editor_property("module_sequence", sequence)
     director.set_editor_property("encounter_wave_one_spawns", ENCOUNTER_WAVES[0])
     director.set_editor_property("encounter_wave_two_spawns", ENCOUNTER_WAVES[1])
     director.set_editor_property("boss_spawn_point", BOSS_SPAWN_POINT)
