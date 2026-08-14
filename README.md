@@ -47,10 +47,12 @@ Vector/
 ## 快速开始
 
 1. **编译**：VS 打开 `Vector/Vector.slnx`，Development Editor / Win64，`Ctrl+Shift+B`；新增类/UPROPERTY 变更后**重启编辑器**
-2. **生成灰盒竞技场**（可选）：编辑器 `Tools → Execute Python Script` 跑 `Tools/Greybox/setup_greybox_arena.py` → `Build → Build Paths` → Play
+2. **生成灰盒竞技场**（可选）：编辑器 `Tools → Execute Python Script` 跑 `Tools/Greybox/setup_greybox_arena.py`（含 10 怪固定合同与西侧出口门）→ `Build → Build Paths` → Play
 3. **手动试玩**：鼠标移动只负责瞄准；`1–5` 选择冲量锤/绳线枪/润滑剂/浮空孢子/升空叉，`LMB` 使用当前装备，`RMB`（或 `MMB`）按住拖动旋转镜头，`Space` 跳跃
 4. **测试**：编辑器 Session Frontend → Automation，搜 `Vector.` 前缀跑全部（本机 Zen 异常，勿用命令行无头跑）
 5. **组合测试靶**（可选）：执行 `Tools/Greybox/setup_physics_combo_test.py`，生成绳线枪双怪/锚墙、调质、撞墙爆发、挑飞/落地震荡专用静止靶
+
+本轮统一 PIE 成功标准见 `Docs/最小狩猎闭环验收_2026-08-14.md`。
 
 ## 数值账本（当前）
 

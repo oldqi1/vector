@@ -55,13 +55,14 @@ def resolve_dependencies():
     """删除旧场景前先验证依赖，防止失败后只剩半个场景。"""
     dependencies = {
         "enemy_class": load_native_class("/Script/Vector.VectorEnemy"),
+        "contract_exit_class": load_native_class("/Script/Vector.VectorContractExit"),
         "game_mode_class": load_native_class("/Script/Vector.VectorGameMode"),
         "player_start_class": load_native_class("/Script/Engine.PlayerStart"),
         "low_friction_zone_class": load_native_class("/Script/Vector.VectorLowFrictionZone"),
         "navmesh_class": load_native_class("/Script/NavigationSystem.NavMeshBoundsVolume"),
         "archetypes": resolve_enemy_archetypes(),
     }
-    log("preflight passed: player, game mode, enemies, archetypes, friction zone, and navmesh resolved")
+    log("preflight passed: player, game mode, enemies, contract exit, archetypes, friction zone, and navmesh resolved")
     return dependencies
 
 def clear_previous(level_actor_subsystem):
@@ -100,7 +101,12 @@ def spawn_floor_and_walls():
     spawn_cube((0, half + 50, 100), (wall_l, wall_t, wall_h), label="GA_Wall_N")
     spawn_cube((0, -half - 50, 100), (wall_l, wall_t, wall_h), label="GA_Wall_S")
     spawn_cube((half + 50, 0, 100), (wall_t, wall_l, wall_h), label="GA_Wall_E")
-    spawn_cube((-half - 50, 0, 100), (wall_t, wall_l, wall_h), label="GA_Wall_W")
+    # West wall is split around y=0. The contract gate fills the 500cm opening.
+    # Its collision opens only after all registered enemies are defeated.
+    spawn_cube((-half - 50, -2125, 100), (wall_t, 37.5, wall_h), label="GA_Wall_W_South")
+    spawn_cube((-half - 50, 2125, 100), (wall_t, 37.5, wall_h), label="GA_Wall_W_North")
+    # Short floor beyond the gate makes crossing the unlocked exit visibly testable.
+    spawn_cube((-4350, 0, -50), (7.0, 6.0, 0.5), label="GA_ExitPlatform")
 
     # 狭窄巷道：东南区（x 1000~3000, y -3000~-1000），两条墙成 6m 宽通道
     # 巷道墙 1：沿 X 方向，y = -1300
@@ -149,6 +155,16 @@ def spawn_low_friction_zone(zone_class):
         raise RuntimeError("failed to spawn VectorLowFrictionZone")
     actor.set_actor_label("GA_LowFrictionVolume")
     log("spawned active low-friction zone: center=(-2500,-2000) size=1200x1200")
+    return actor
+
+def spawn_contract_exit(contract_exit_class):
+    """Place the red contract gate in the west-wall opening."""
+    actor = get_editor_subsystem().spawn_actor_from_class(
+        contract_exit_class, unreal.Vector(-4000.0, 0.0, 180.0))
+    if actor is None:
+        raise RuntimeError("failed to spawn VectorContractExit")
+    actor.set_actor_label("GA_ContractExit")
+    log("spawned contract exit: west opening=(-4000,0), locked until 10/10 enemies defeated")
     return actor
 
 def spawn_enemy(enemy_class, archetype_name, archetype_enum, location, label):
@@ -209,9 +225,10 @@ def main():
     spawn_floor_and_walls()
     spawn_player_start(dependencies["player_start_class"])
     spawn_low_friction_zone(dependencies["low_friction_zone_class"])
+    spawn_contract_exit(dependencies["contract_exit_class"])
     spawn_enemies(dependencies["enemy_class"], dependencies["archetypes"])
     spawn_navmesh(dependencies["navmesh_class"])
-    log("SUCCESS: arena generated with PlayerStart, 10 enemies, and active low-friction zone. Build Paths, then Play.")
+    log("SUCCESS: arena generated with PlayerStart, 10 enemies, active low-friction zone, and west contract exit. Build Paths, then Play.")
 
 if __name__ == "__main__":
     try:
