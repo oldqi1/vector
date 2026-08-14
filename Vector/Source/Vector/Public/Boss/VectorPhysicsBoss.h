@@ -30,6 +30,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Vector|Boss")
 	FString GetBossStateDescription() const { return BossState.Describe(); }
 
+	/** True only during the launched horizontal ram, for kill attribution. */
+	bool IsExecutingRam() const;
+
 	UPROPERTY(BlueprintAssignable, Category = "Vector|Boss")
 	FVectorPhysicsBossPhaseChangedSignature OnBossPhaseChanged;
 

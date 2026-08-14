@@ -35,6 +35,7 @@ bool FVectorKillAttributionCount::RunTest(const FString& Parameters)
 
 	// 未记录的来源计数为 0。
 	TestEqual(TEXT("冲锋击杀数=0"), Ledger->GetKillCount(EVectorKillCause::ChargerRam), 0);
+	TestEqual(TEXT("Boss 冲锋击杀数=0"), Ledger->GetKillCount(EVectorKillCause::BossRam), 0);
 	return true;
 }
 
@@ -90,12 +91,14 @@ bool FVectorKillAttributionReset::RunTest(const FString& Parameters)
 	Ledger->RecordKill(EVectorKillCause::BodyCollision);
 	Ledger->RecordKill(EVectorKillCause::BodyCollision);
 	Ledger->RecordKill(EVectorKillCause::ChargerRam);
-	TestEqual(TEXT("重置前总数=3"), Ledger->GetTotalKills(), 3);
+	Ledger->RecordKill(EVectorKillCause::BossRam);
+	TestEqual(TEXT("重置前总数=4"), Ledger->GetTotalKills(), 4);
 
 	Ledger->ResetLedger();
 	TestEqual(TEXT("重置后总数=0"), Ledger->GetTotalKills(), 0);
 	TestEqual(TEXT("重置后 Body=0"), Ledger->GetKillCount(EVectorKillCause::BodyCollision), 0);
 	TestEqual(TEXT("重置后 ChargerRam=0"), Ledger->GetKillCount(EVectorKillCause::ChargerRam), 0);
+	TestEqual(TEXT("重置后 BossRam=0"), Ledger->GetKillCount(EVectorKillCause::BossRam), 0);
 
 	// 重置后仍可继续记录（本局新会话）。
 	Ledger->RecordKill(EVectorKillCause::LandingShock);

@@ -27,6 +27,9 @@ enum class EVectorKillCause : uint8
 	/** 冲锋中的角槌兽撞死其他敌人（免费炮弹/借力打力）。 */
 	ChargerRam,
 
+	/** 物理 Boss 锁向冲锋撞死其他敌人（诱导 Boss 自清场）。 */
+	BossRam,
+
 	/** 落地震荡 AOE 致死（挑飞→下砸流）。 */
 	LandingShock,
 

@@ -82,6 +82,11 @@ bool AVectorPhysicsBoss::ShouldPauseAI() const
 	return Super::ShouldPauseAI() || RamPhase != ERamPhase::Waiting;
 }
 
+bool AVectorPhysicsBoss::IsExecutingRam() const
+{
+	return RamPhase == ERamPhase::Active;
+}
+
 void AVectorPhysicsBoss::HandleBossHealthChanged(
 	const double CurrentHealth,
 	const double MaximumHealth,

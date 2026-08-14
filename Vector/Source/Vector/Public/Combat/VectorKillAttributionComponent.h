@@ -15,6 +15,7 @@
  *   - 撞墙自伤（WallCollision）
  *   - 撞怪（BodyCollision）
  *   - 冲锋怪撞死他人（ChargerRam）
+ *   - 物理 Boss 冲锋撞死他人（BossRam）
  *   - 落地震荡（LandingShock）
  * 局末（EndPlay / 显式 LogSummary）输出汇总，任何单一来源占比超过
  * DominanceThreshold（默认 60%）时报警——对应设计案"死亡检查点"：

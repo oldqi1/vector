@@ -3,6 +3,7 @@
 #include "Combat/VectorImpactCollisionComponent.h"
 
 #include "AIController.h"
+#include "Boss/VectorPhysicsBoss.h"
 #include "Combat/VectorEnemy.h"
 #include "Combat/VectorEnemyController.h"
 #include "Combat/VectorHealthComponent.h"
@@ -30,19 +31,27 @@ namespace
 		return GameMode ? GameMode->FindComponentByClass<UVectorKillAttributionComponent>() : nullptr;
 	}
 
-	/** 撞击者（GetOwner）是否正在冲锋（角槌兽冲锋撞死他人 → 归因 ChargerRam）。 */
-	bool IsChargerRamming(const AActor* Striker)
+	/** Resolves a body-collision kill source without changing collision math. */
+	EVectorKillCause GetBodyCollisionKillCause(const AActor* Striker)
 	{
+		if (const AVectorPhysicsBoss* Boss = Cast<AVectorPhysicsBoss>(Striker))
+		{
+			return Boss->IsExecutingRam()
+				? EVectorKillCause::BossRam
+				: EVectorKillCause::BodyCollision;
+		}
 		const AVectorEnemy* Enemy = Cast<AVectorEnemy>(Striker);
 		if (!Enemy)
 		{
-			return false;
+			return EVectorKillCause::BodyCollision;
 		}
 		const AController* Controller = Enemy->GetController();
 		const AVectorEnemyController* EnemyController = Controller
 			? Cast<AVectorEnemyController>(Controller)
 			: nullptr;
-		return EnemyController && EnemyController->IsCharging();
+		return EnemyController && EnemyController->IsCharging()
+			? EVectorKillCause::ChargerRam
+			: EVectorKillCause::BodyCollision;
 	}
 
 	FVector GetEffectiveVelocity(const AActor* Actor)
@@ -226,7 +235,7 @@ void UVectorImpactCollisionComponent::ResolveTargetCollision(
 	// Keep the established target-side name/log contract while adding the
 	// reciprocal monster-side consequence below.
 	const double Damage = DamageToTarget;
-	const bool bTargetWasRamming = IsChargerRamming(TargetActor);
+	const EVectorKillCause TargetCollisionCause = GetBodyCollisionKillCause(TargetActor);
 	const FString StrikerMassClassName = StrikerStability
 		? UEnum::GetValueAsString(StrikerStability->GetMassClass()) : TEXT("N/A");
 	const FString TargetMassClassName = TargetStability
@@ -308,10 +317,7 @@ void UVectorImpactCollisionComponent::ResolveTargetCollision(
 	{
 		if (UVectorKillAttributionComponent* Attribution = FindKillAttribution(GetWorld()))
 		{
-			const EVectorKillCause Cause = IsChargerRamming(GetOwner())
-				? EVectorKillCause::ChargerRam
-				: EVectorKillCause::BodyCollision;
-			Attribution->RecordKill(Cause);
+			Attribution->RecordKill(GetBodyCollisionKillCause(GetOwner()));
 		}
 	}
 
@@ -327,10 +333,7 @@ void UVectorImpactCollisionComponent::ResolveTargetCollision(
 		{
 			if (UVectorKillAttributionComponent* Attribution = FindKillAttribution(GetWorld()))
 			{
-				const EVectorKillCause Cause = bTargetWasRamming
-					? EVectorKillCause::ChargerRam
-					: EVectorKillCause::BodyCollision;
-				Attribution->RecordKill(Cause);
+				Attribution->RecordKill(TargetCollisionCause);
 			}
 		}
 	}
