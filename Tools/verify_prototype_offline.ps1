@@ -12,8 +12,8 @@ try {
     Write-Output "[2/4] Checking Unreal Automation registrations..."
     $TestFiles = Get-ChildItem "Vector/Source/Vector/Private/Tests" -Filter "*.cpp" -File
     $RegistrationCount = ($TestFiles | Select-String -Pattern '^IMPLEMENT_(SIMPLE|COMPLEX)_AUTOMATION_TEST\(').Count
-    if ($RegistrationCount -ne 49) {
-        throw "Expected 49 Automation registrations, found $RegistrationCount"
+    if ($RegistrationCount -ne 50) {
+        throw "Expected 50 Automation registrations, found $RegistrationCount"
     }
     Write-Output "Automation registrations: $RegistrationCount"
 
@@ -34,6 +34,7 @@ try {
         "Tools/collision_chain_1d_sim.py",
         "Tools/friction_slide_sim.py",
         "Tools/gravity_hook_sim.py",
+        "Tools/environment_redirector_sim.py",
         "Tools/lift_fork_redirect_sim.py",
         "Tools/physics_combo_sim.py"
     )

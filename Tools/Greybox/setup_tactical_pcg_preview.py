@@ -13,6 +13,7 @@ import unreal
 SEED = 4417
 PREFIX = "PCG_"
 MODULE_SPACING = 2800.0
+ENABLE_HEIGHT_REDIRECTOR = True
 ENCOUNTER_WAVES = []
 BOSS_SPAWN_POINT = None
 BOSS_ADD_SPAWN_POINTS = []
@@ -209,7 +210,7 @@ def build_hard_lane(center_x, target_point_class):
     ENCOUNTER_WAVES.append(markers)
 
 
-def build_height_shelf(center_x, target_point_class):
+def build_height_shelf(center_x, target_point_class, redirector_class):
     spawn_floor(center_x, suffix="HeightShelf_Floor")
     spawn_boundary(center_x)
     spawn_cube((center_x + 650.0, 0.0, 250.0),
@@ -221,15 +222,37 @@ def build_height_shelf(center_x, target_point_class):
     spawn_ramp_x(center_x - 100.0, 450.0, 1.0, 750.0, 300.0,
                  width=420.0, base_z=225.0,
                  label="HeightShelf_UpperMomentumRamp")
-    spawn_cube((center_x - 1050.0, 0.0, 125.0), (1.0, 22.0, 3.5), "HeightShelf_Receiver")
+    spawn_cube((center_x - 1050.0, 0.0, 125.0),
+               (1.0, 22.0, 3.5), "HeightShelf_LowerReceiverWall")
+    spawn_cube((center_x - 760.0, 0.0, -38.0),
+               (4.2, 14.0, 0.14), "HeightShelf_LowerCrowdReceiver")
+    if ENABLE_HEIGHT_REDIRECTOR:
+        redirector = subsystem().spawn_actor_from_class(
+            redirector_class,
+            unreal.Vector(center_x - 20.0, -450.0, 365.0))
+        if redirector is None:
+            raise RuntimeError("failed to spawn HeightShelf environment redirector")
+        redirector.set_actor_label(PREFIX + "HeightShelf_EnvironmentRedirector")
+        redirector.set_actor_rotation(
+            unreal.Rotator(roll=0.0, pitch=50.0, yaw=0.0), False)
+        redirector.set_editor_property("redirect_efficiency", 0.88)
+        redirector.set_editor_property("minimum_input_speed_cm_per_second", 220.0)
+        log("HeightShelf route A: charger/orb -> EnvironmentRedirector -> upper deck")
+    else:
+        log("HeightShelf deletion test: EnvironmentRedirector REMOVED; "
+            "route B remains VectorGun -> LiftFork -> DirectedSlam -> LowerCrowd")
     markers = []
-    offsets = ((450, -600, 650), (450, -200, 650), (650, 250, 650), (650, 650, 650),
+    # Slot 1 is the charger Source and starts on the lower momentum ramp,
+    # aligned with the environmental converter. Slot 0 remains the upper heavy
+    # Receiver so the two routes do not collapse to the same opening move.
+    offsets = ((450, -600, 650), (-650, -450, 170), (650, 250, 650), (650, 650, 650),
                (-700, -600, 80), (-700, -200, 80), (-700, 250, 80), (-700, 650, 80))
     for index, offset in enumerate(offsets):
         markers.append(spawn_marker(
             target_point_class, (center_x + offset[0], offset[1], offset[2]),
             "HeightShelf_Enemy_%02d" % index))
     ENCOUNTER_WAVES.append(markers)
+    log("HeightShelf route B: vector injection -> LiftFork -> directed slam -> lower crowd")
 
 
 def build_slick_cross(center_x, target_point_class, friction_class):
@@ -343,6 +366,7 @@ def main(seed=SEED):
         "player_start": load_native_class("/Script/Engine.PlayerStart"),
         "target_point": load_native_class("/Script/Engine.TargetPoint"),
         "friction": load_native_class("/Script/Vector.VectorLowFrictionZone"),
+        "redirector": load_native_class("/Script/Vector.VectorEnvironmentalRedirector"),
         "extraction": load_native_class("/Script/Vector.VectorExtractionZone"),
         "contract_exit": load_native_class("/Script/Vector.VectorContractExit"),
         "director": load_native_class("/Script/Vector.VectorPCGEncounterDirector"),
@@ -365,7 +389,8 @@ def main(seed=SEED):
         "SafeStart": lambda x: build_safe_start(x, classes["target_point"], classes["player_start"]),
         "OpenBowl": lambda x: build_open_bowl(x, classes["target_point"]),
         "HardLane": lambda x: build_hard_lane(x, classes["target_point"]),
-        "HeightShelf": lambda x: build_height_shelf(x, classes["target_point"]),
+        "HeightShelf": lambda x: build_height_shelf(
+            x, classes["target_point"], classes["redirector"]),
         "SlickCross": lambda x: build_slick_cross(x, classes["target_point"], classes["friction"]),
         "BossRing": lambda x: build_boss_ring(
             x, classes["target_point"], classes["friction"]),

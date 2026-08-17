@@ -122,6 +122,14 @@ bool FVectorTacticalCircuitContractTest::RunTest(const FString& Parameters)
 		TestFalse(FString::Printf(TEXT("%s loses its combat circuit when the converter is removed"),
 			*Module.ModuleId.ToString()), WithoutConverter.HasCompleteCircuit());
 	}
+	const FVectorTacticalModuleDefinition& HeightShelf = Catalog[2];
+	TestTrue(TEXT("HeightShelf route A owns the environment redirector"),
+		HeightShelf.Recipes[0].Contains(TEXT("EnvironmentRedirector")));
+	TestTrue(TEXT("HeightShelf route B owns lift then directed slam"),
+		HeightShelf.Recipes[1].Contains(TEXT("LiftFork>DirectedSlam")));
+	TestTrue(TEXT("HeightShelf routes start with different player decisions"),
+		HeightShelf.Recipes[0].StartsWith(TEXT("BaitCharge>"))
+		&& HeightShelf.Recipes[1].StartsWith(TEXT("VectorInject>")));
 	return true;
 }
 

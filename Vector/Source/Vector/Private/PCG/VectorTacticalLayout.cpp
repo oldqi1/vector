@@ -42,15 +42,15 @@ namespace VectorTacticalLayoutInternal
 			Module.RewardBias = TEXT("Recharge");
 			break;
 		case EVectorTacticalModuleType::HeightShelf:
-			Module.Sources = { TEXT("GravityVent"), TEXT("VectorInjection") };
-			Module.Converters = { TEXT("LiftShelf"), TEXT("CableSpan") };
-			Module.Receivers = { TEXT("LowerCrowd"), TEXT("FractureWall") };
+			Module.Sources = { TEXT("ChargerLane"), TEXT("VectorInjection") };
+			Module.Converters = { TEXT("EnvironmentRedirector"), TEXT("LiftFork") };
+			Module.Receivers = { TEXT("UpperImpactDeck"), TEXT("LowerCrowd") };
 			Module.RecoveryPockets = { TEXT("UpperLanding") };
 			Module.SupportedToolVerbs = { TEXT("LiftConvert"), TEXT("CableRoute"), TEXT("VectorInject") };
 			Module.EnemyFunctionalSlots = { TEXT("Receiver"), TEXT("Source"), TEXT("Ammunition") };
 			Module.Recipes = {
-				TEXT("GravityVent>LiftConvert>LowerCrowd"),
-				TEXT("CableRoute>HeightDrop>FractureWall") };
+				TEXT("BaitCharge>EnvironmentRedirector>UpperImpactDeck"),
+				TEXT("VectorInject>LiftFork>DirectedSlam>LowerCrowd") };
 			Module.RewardBias = TEXT("Range");
 			break;
 		case EVectorTacticalModuleType::SlickCross:
