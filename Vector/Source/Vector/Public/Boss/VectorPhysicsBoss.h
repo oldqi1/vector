@@ -48,7 +48,7 @@ public:
 	TObjectPtr<UPointLightComponent> BossPhaseLight;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Ram", meta = (ClampMin = "0.0", Units = "cm"))
-	double RamTriggerRangeCm = 1800.0;
+	double RamTriggerRangeCm = 3000.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Ram", meta = (ClampMin = "0.01", Units = "s"))
 	double RamTelegraphSeconds = 0.85;

@@ -109,6 +109,22 @@ double FVectorPhysicsBossState::GetEffectivePhysicalMass() const
 	}
 }
 
+double FVectorPhysicsBossState::GetPursuitSpeedCmPerSecond() const
+{
+	switch (Phase)
+	{
+	case EVectorPhysicsBossPhase::AnchoredShell:
+		return FMath::Max(0.0, Rules.AnchoredPursuitSpeedCmPerSecond);
+	case EVectorPhysicsBossPhase::ExposedShell:
+		return FMath::Max(0.0, Rules.ExposedPursuitSpeedCmPerSecond);
+	case EVectorPhysicsBossPhase::Overload:
+		return FMath::Max(0.0, Rules.OverloadPursuitSpeedCmPerSecond);
+	case EVectorPhysicsBossPhase::Defeated:
+	default:
+		return 0.0;
+	}
+}
+
 double FVectorPhysicsBossState::GetRamIntervalSeconds() const
 {
 	switch (Phase)
@@ -215,12 +231,13 @@ EVectorPhysicsBossAttack FVectorPhysicsBossState::SelectAttack(
 FString FVectorPhysicsBossState::Describe() const
 {
 	return FString::Printf(
-		TEXT("phase=%s transitions=%d structure=%d/2 staggered=%s resolve=%.1fs mass=%.1f ram=%.2fs recovery=%.2fs maxAdds=%d"),
+		TEXT("phase=%s transitions=%d structure=%d/2 staggered=%s resolve=%.1fs mass=%.1f pursuit=%.0f ram=%.2fs recovery=%.2fs maxAdds=%d"),
 		*VectorPhysicsBossStateInternal::PhaseToString(Phase), TransitionCount,
 		BrokenStructureGroupCount,
 		bHasEverStaggered ? TEXT("YES") : TEXT("no"),
 		StaggerResolveSecondsRemaining,
-		GetEffectivePhysicalMass(), GetRamIntervalSeconds(), GetRecoverySeconds(),
+		GetEffectivePhysicalMass(), GetPursuitSpeedCmPerSecond(),
+		GetRamIntervalSeconds(), GetRecoverySeconds(),
 		GetMaximumConcurrentAdds());
 }
 

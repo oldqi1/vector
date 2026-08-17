@@ -30,6 +30,9 @@ struct VECTOR_API FVectorPhysicsBossRules
 	double AnchoredPhysicalMass = 8.0;
 	double ExposedPhysicalMass = 4.0;
 	double OverloadPhysicalMass = 3.0;
+	double AnchoredPursuitSpeedCmPerSecond = 210.0;
+	double ExposedPursuitSpeedCmPerSecond = 285.0;
+	double OverloadPursuitSpeedCmPerSecond = 360.0;
 
 	double AnchoredRamIntervalSeconds = 3.8;
 	double ExposedRamIntervalSeconds = 3.2;
@@ -74,6 +77,7 @@ struct VECTOR_API FVectorPhysicsBossState
 	bool IsDefeated() const { return Phase == EVectorPhysicsBossPhase::Defeated; }
 
 	double GetEffectivePhysicalMass() const;
+	double GetPursuitSpeedCmPerSecond() const;
 	double GetRamIntervalSeconds() const;
 	double GetRecoverySeconds() const;
 	int32 GetMaximumConcurrentAdds() const;

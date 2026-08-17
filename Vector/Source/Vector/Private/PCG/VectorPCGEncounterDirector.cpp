@@ -238,6 +238,13 @@ bool AVectorPCGEncounterDirector::ValidateRouteConfiguration(
 			*ModuleSequence[1], *ModuleSequence[2]);
 		return false;
 	}
+	if (ModuleSequence[2] != TEXT("HeightShelf"))
+	{
+		OutFailureReason = FString::Printf(
+			TEXT("demo route second encounter must be HeightShelf, found %s"),
+			*ModuleSequence[2]);
+		return false;
+	}
 	return true;
 }
 

@@ -16,6 +16,8 @@ bool FVectorPhysicsBossInitialStateTest::RunTest(const FString& Parameters)
 	const FVectorPhysicsBossState State;
 	TestEqual(TEXT("Boss begins anchored"), State.GetPhase(), EVectorPhysicsBossPhase::AnchoredShell);
 	TestEqual(TEXT("Anchored mass is physical, not infinite"), State.GetEffectivePhysicalMass(), 8.0);
+	TestEqual(TEXT("Anchored Boss still pursues instead of waiting at center"),
+		State.GetPursuitSpeedCmPerSecond(), 210.0);
 	TestEqual(TEXT("Anchored add budget"), State.GetMaximumConcurrentAdds(), 2);
 	TestTrue(TEXT("First add is allowed"), State.CanSpawnAdd(0));
 	const FVector Turned = FVectorWeakGuidanceMath::TurnDirection(
@@ -51,9 +53,13 @@ bool FVectorPhysicsBossStructureExposeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("First discrete shell event changes phase"), State.NotifyStructureBroken(1));
 	TestEqual(TEXT("One shell group exposes one side"), State.GetPhase(), EVectorPhysicsBossPhase::ExposedShell);
 	TestEqual(TEXT("Exposed mass falls through the same physical rule"), State.GetEffectivePhysicalMass(), 4.0);
+	const double ExposedPursuitSpeed = State.GetPursuitSpeedCmPerSecond();
+	TestTrue(TEXT("Breaking one anchor makes pursuit faster"), ExposedPursuitSpeed > 210.0);
 	TestFalse(TEXT("Repeated first-group report is idempotent"), State.NotifyStructureBroken(1));
 	TestTrue(TEXT("Second group completes the physical contract"), State.NotifyStructureBroken(2));
 	TestEqual(TEXT("Both shell groups enter overload/core window"), State.GetPhase(), EVectorPhysicsBossPhase::Overload);
+	TestTrue(TEXT("Overload pursuit is faster than exposed pursuit"),
+		State.GetPursuitSpeedCmPerSecond() > ExposedPursuitSpeed);
 	TestEqual(TEXT("Only two structure transitions were recorded"), State.GetTransitionCount(), 2);
 	return true;
 }

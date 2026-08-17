@@ -832,6 +832,11 @@ void AVectorPhysicsBoss::ApplyPhaseOutputs(const EVectorPhysicsBossPhase Previou
 		StabilityComponent->PhysicalMassHeavy = PhaseMass;
 		StabilityComponent->StaggeredPhysicalMassHeavy = PhaseMass;
 	}
+	MoveSpeedCmPerSecond = BossState.GetPursuitSpeedCmPerSecond();
+	if (UCharacterMovementComponent* BossMovement = GetCharacterMovement())
+	{
+		BossMovement->MaxWalkSpeed = static_cast<float>(MoveSpeedCmPerSecond);
+	}
 	UpdateBossPresentation();
 	const EVectorPhysicsBossPhase CurrentPhase = BossState.GetPhase();
 	if (CurrentPhase == EVectorPhysicsBossPhase::Defeated)
@@ -845,9 +850,9 @@ void AVectorPhysicsBoss::ApplyPhaseOutputs(const EVectorPhysicsBossPhase Previou
 	{
 		OnBossPhaseChanged.Broadcast(PreviousPhase, CurrentPhase);
 	}
-	UE_LOG(LogVectorBoss, Log, TEXT("Boss phase applied: actor=%s previous=%d current=%d %s"),
+	UE_LOG(LogVectorBoss, Log, TEXT("Boss phase applied: actor=%s previous=%d current=%d pursuit=%.0f engagementRange=%.0f %s"),
 		*GetName(), static_cast<int32>(PreviousPhase), static_cast<int32>(CurrentPhase),
-		*BossState.Describe());
+		MoveSpeedCmPerSecond, RamTriggerRangeCm, *BossState.Describe());
 }
 
 void AVectorPhysicsBoss::UpdateBossPresentation()

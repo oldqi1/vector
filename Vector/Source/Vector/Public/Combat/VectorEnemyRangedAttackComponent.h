@@ -54,6 +54,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|EnemyRanged", meta = (Units = "s"))
 	double CooldownSeconds = 0.0;
 
+	/** A readable interruption earns safety, but cannot be followed by an instant retry. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|EnemyRanged", meta = (Units = "s", ClampMin = "0.0"))
+	double InterruptedRetrySeconds = 0.75;
+
 private:
 	enum class EPhase : uint8
 	{

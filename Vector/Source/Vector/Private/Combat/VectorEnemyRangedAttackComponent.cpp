@@ -24,6 +24,10 @@ UVectorEnemyRangedAttackComponent::UVectorEnemyRangedAttackComponent()
 void UVectorEnemyRangedAttackComponent::ConfigurePattern(
 	const EVectorEnemyRangedPattern NewPattern)
 {
+	if (AVectorTestDummy* Dummy = Cast<AVectorTestDummy>(GetOwner()))
+	{
+		Dummy->SetAttackWarningPresentation(false);
+	}
 	Pattern = NewPattern;
 	Phase = EPhase::Idle;
 	PhaseSecondsRemaining = 0.0;
@@ -229,19 +233,24 @@ bool UVectorEnemyRangedAttackComponent::SpawnProjectile(
 
 void UVectorEnemyRangedAttackComponent::CancelWarmup(const TCHAR* Reason)
 {
-	if (Phase == EPhase::Warmup)
+	// External motion may pause an existing cooldown, but must never erase it.
+	// Otherwise a successful interrupt is punished by an immediate new telegraph
+	// when the target lands.
+	if (Phase != EPhase::Warmup)
 	{
-		if (AVectorTestDummy* Dummy = Cast<AVectorTestDummy>(GetOwner()))
-		{
-			Dummy->SetAttackWarningPresentation(false);
-		}
-		UE_LOG(LogVectorEnemyRanged, Log,
-			TEXT("Enemy ranged cancelled: owner=%s pattern=%s reason=%s"),
-			*GetNameSafe(GetOwner()), *UEnum::GetValueAsString(Pattern),
-			Reason ? Reason : TEXT("UNKNOWN"));
+		return;
 	}
-	Phase = EPhase::Idle;
-	PhaseSecondsRemaining = 0.0;
+	if (AVectorTestDummy* Dummy = Cast<AVectorTestDummy>(GetOwner()))
+	{
+		Dummy->SetAttackWarningPresentation(false);
+	}
+	Phase = EPhase::Cooldown;
+	PhaseSecondsRemaining = FMath::Max(0.0,
+		FMath::Min(InterruptedRetrySeconds, CooldownSeconds));
+	UE_LOG(LogVectorEnemyRanged, Log,
+		TEXT("Enemy ranged interrupted: owner=%s pattern=%s reason=%s retry=%.2fs"),
+		*GetNameSafe(GetOwner()), *UEnum::GetValueAsString(Pattern),
+		Reason ? Reason : TEXT("UNKNOWN"), PhaseSecondsRemaining);
 }
 
 void UVectorEnemyRangedAttackComponent::DrawTelegraph(const APawn* PlayerPawn) const
