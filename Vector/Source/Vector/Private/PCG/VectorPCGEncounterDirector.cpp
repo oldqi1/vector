@@ -371,6 +371,21 @@ int32 AVectorPCGEncounterDirector::SpawnEncounterWave(
 			Definition->Recipes.IsValidIndex(1) ? *Definition->Recipes[1] : TEXT("NONE"),
 			Definition->HasCompleteCircuit() && Definition->HasDistinctOpenings()
 				? TEXT("PASS") : TEXT("FAIL"));
+		if (Definition->Type == EVectorTacticalModuleType::HeightShelf)
+		{
+			const FName EnvironmentRedirector(TEXT("EnvironmentRedirector"));
+			const FName LiftFork(TEXT("LiftFork"));
+			const bool bDeletionGate =
+				Definition->HasRouteDeletionFallback(EnvironmentRedirector)
+				&& Definition->HasRouteDeletionFallback(LiftFork);
+			UE_LOG(LogVectorPCGEncounter, Log,
+				TEXT("HeightShelf deletion gate: removeEnvironment routes=%d->%d removeLiftFork routes=%d->%d ledger=ENEMY_ONLY deviceRequiredForClear=0 check=%s"),
+				Definition->Recipes.Num(),
+				Definition->CountRecipesRemainingWithoutNode(EnvironmentRedirector),
+				Definition->Recipes.Num(),
+				Definition->CountRecipesRemainingWithoutNode(LiftFork),
+				bDeletionGate ? TEXT("PASS") : TEXT("FAIL"));
+		}
 	}
 	int32 SpawnedCount = 0;
 	for (int32 Index = 0; Index < SpawnPoints.Num(); ++Index)

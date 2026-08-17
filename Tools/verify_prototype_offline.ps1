@@ -35,6 +35,7 @@ try {
         "Tools/friction_slide_sim.py",
         "Tools/gravity_hook_sim.py",
         "Tools/environment_redirector_sim.py",
+        "Tools/height_circuit_deletion_sim.py",
         "Tools/lift_fork_redirect_sim.py",
         "Tools/physics_combo_sim.py"
     )

@@ -13,6 +13,20 @@ namespace VectorTacticalLayoutInternal
 		| EVectorPhysicsOpportunity::CrowdReceiver
 		| EVectorPhysicsOpportunity::HeightDrop;
 
+	bool RecipeContainsNode(const FString& Recipe, const FName Node)
+	{
+		if (Node.IsNone())
+		{
+			return false;
+		}
+		TArray<FString> Tokens;
+		Recipe.ParseIntoArray(Tokens, TEXT(">"), true);
+		return Tokens.ContainsByPredicate([Node](const FString& Token)
+		{
+			return FName(*Token) == Node;
+		});
+	}
+
 	void ConfigureCircuit(FVectorTacticalModuleDefinition& Module)
 	{
 		switch (Module.Type)
@@ -239,6 +253,31 @@ bool FVectorTacticalModuleDefinition::HasDistinctOpenings() const
 		&& SupportedToolVerbs[0] != SupportedToolVerbs[1];
 }
 
+int32 FVectorTacticalModuleDefinition::CountRecipesUsingNode(const FName Node) const
+{
+	int32 Count = 0;
+	for (const FString& Recipe : Recipes)
+	{
+		if (VectorTacticalLayoutInternal::RecipeContainsNode(Recipe, Node))
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+int32 FVectorTacticalModuleDefinition::CountRecipesRemainingWithoutNode(
+	const FName Node) const
+{
+	return Recipes.Num() - CountRecipesUsingNode(Node);
+}
+
+bool FVectorTacticalModuleDefinition::HasRouteDeletionFallback(const FName Node) const
+{
+	return CountRecipesUsingNode(Node) > 0
+		&& CountRecipesRemainingWithoutNode(Node) > 0;
+}
+
 FString FVectorTacticalModuleDefinition::DescribeCircuit() const
 {
 	return FString::Printf(
@@ -396,6 +435,24 @@ bool FVectorTacticalGenerator::Validate(
 				*Module.ModuleId.ToString(), Module.HeightLayerCount,
 				Module.MaximumHeightDifferenceCm);
 			return false;
+		}
+		if (Module.Type == EVectorTacticalModuleType::HeightShelf)
+		{
+			const FName EnvironmentRedirector(TEXT("EnvironmentRedirector"));
+			const FName LiftFork(TEXT("LiftFork"));
+			if (!Module.Converters.Contains(EnvironmentRedirector)
+				|| !Module.Converters.Contains(LiftFork)
+				|| !Module.HasRouteDeletionFallback(EnvironmentRedirector)
+				|| !Module.HasRouteDeletionFallback(LiftFork))
+			{
+				OutFailureReason = FString::Printf(
+					TEXT("HeightShelf deletion contract invalid: envUses=%d envRemain=%d liftUses=%d liftRemain=%d"),
+					Module.CountRecipesUsingNode(EnvironmentRedirector),
+					Module.CountRecipesRemainingWithoutNode(EnvironmentRedirector),
+					Module.CountRecipesUsingNode(LiftFork),
+					Module.CountRecipesRemainingWithoutNode(LiftFork));
+				return false;
+			}
 		}
 		if (bHasPreviousEncounter && Module.Opportunities == PreviousOpportunities)
 		{

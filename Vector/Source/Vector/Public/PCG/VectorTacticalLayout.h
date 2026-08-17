@@ -52,6 +52,10 @@ struct VECTOR_API FVectorTacticalModuleDefinition
 	bool HasOpportunity(EVectorPhysicsOpportunity Opportunity) const;
 	bool HasCompleteCircuit() const;
 	bool HasDistinctOpenings() const;
+	/** Exact '>'-delimited recipe-node queries used by deletion tests. */
+	int32 CountRecipesUsingNode(FName Node) const;
+	int32 CountRecipesRemainingWithoutNode(FName Node) const;
+	bool HasRouteDeletionFallback(FName Node) const;
 	FString DescribeCircuit() const;
 };
 

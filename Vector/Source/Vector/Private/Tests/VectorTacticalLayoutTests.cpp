@@ -130,6 +130,20 @@ bool FVectorTacticalCircuitContractTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("HeightShelf routes start with different player decisions"),
 		HeightShelf.Recipes[0].StartsWith(TEXT("BaitCharge>"))
 		&& HeightShelf.Recipes[1].StartsWith(TEXT("VectorInject>")));
+	const FName EnvironmentRedirector(TEXT("EnvironmentRedirector"));
+	const FName LiftFork(TEXT("LiftFork"));
+	TestEqual(TEXT("Removing the environment converter deletes exactly one route"),
+		HeightShelf.CountRecipesUsingNode(EnvironmentRedirector), 1);
+	TestEqual(TEXT("Environment deletion leaves the tool route available"),
+		HeightShelf.CountRecipesRemainingWithoutNode(EnvironmentRedirector), 1);
+	TestTrue(TEXT("Environment deletion satisfies the non-softlock fallback gate"),
+		HeightShelf.HasRouteDeletionFallback(EnvironmentRedirector));
+	TestEqual(TEXT("Disabling Lift Fork deletes exactly one route"),
+		HeightShelf.CountRecipesUsingNode(LiftFork), 1);
+	TestEqual(TEXT("Lift Fork deletion leaves the environment route available"),
+		HeightShelf.CountRecipesRemainingWithoutNode(LiftFork), 1);
+	TestTrue(TEXT("Lift Fork deletion satisfies the non-softlock fallback gate"),
+		HeightShelf.HasRouteDeletionFallback(LiftFork));
 	return true;
 }
 
