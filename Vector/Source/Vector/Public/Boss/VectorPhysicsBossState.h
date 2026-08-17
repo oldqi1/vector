@@ -27,9 +27,6 @@ enum class EVectorPhysicsBossAttack : uint8
 /** Tunable phase thresholds and outputs. The state machine itself owns no Actor. */
 struct VECTOR_API FVectorPhysicsBossRules
 {
-	double ExposedHealthRatio = 0.65;
-	double OverloadHealthRatio = 0.30;
-
 	double AnchoredPhysicalMass = 8.0;
 	double ExposedPhysicalMass = 4.0;
 	double OverloadPhysicalMass = 3.0;
@@ -50,9 +47,10 @@ struct VECTOR_API FVectorPhysicsBossRules
 /**
  * Deterministic, monotonic Boss phase ledger.
  *
- * Health and the first real stagger are facts supplied by gameplay components.
- * Phase changes only alter parameters; they never erase velocity, teleport the
- * Boss, clear a tether, or grant physics immunity.
+ * Discrete shell-group events own playable phases; health owns final death and
+ * stagger only interrupts the current attack. Phase changes alter parameters;
+ * they never erase velocity, teleport the Boss, clear a tether, or grant
+ * physics immunity.
  */
 struct VECTOR_API FVectorPhysicsBossState
 {
@@ -60,12 +58,19 @@ struct VECTOR_API FVectorPhysicsBossState
 		const FVectorPhysicsBossRules& InRules = FVectorPhysicsBossRules());
 
 	void Reset();
+	/** Health only owns final death; structure events own playable phase changes. */
 	bool ApplyHealthRatio(double HealthRatio);
+	bool NotifyStructureBroken(int32 BrokenGroupCount);
 	bool NotifyStaggered();
+	/** Opens one finite interrupt, then rejects repeated stagger attempts until resolve expires. */
+	bool TryBeginStaggerResolve(double ResolveDurationSeconds);
+	void AdvanceStaggerResolve(double DeltaSeconds);
 
 	EVectorPhysicsBossPhase GetPhase() const { return Phase; }
 	int32 GetTransitionCount() const { return TransitionCount; }
 	bool HasEverStaggered() const { return bHasEverStaggered; }
+	bool IsStaggerResolveActive() const { return StaggerResolveSecondsRemaining > 0.0; }
+	double GetStaggerResolveSecondsRemaining() const { return StaggerResolveSecondsRemaining; }
 	bool IsDefeated() const { return Phase == EVectorPhysicsBossPhase::Defeated; }
 
 	double GetEffectivePhysicalMass() const;
@@ -84,4 +89,6 @@ private:
 	EVectorPhysicsBossPhase Phase = EVectorPhysicsBossPhase::AnchoredShell;
 	int32 TransitionCount = 0;
 	bool bHasEverStaggered = false;
+	int32 BrokenStructureGroupCount = 0;
+	double StaggerResolveSecondsRemaining = 0.0;
 };

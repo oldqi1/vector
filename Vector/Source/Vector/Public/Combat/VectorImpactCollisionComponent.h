@@ -42,6 +42,22 @@ public:
 	/** 落地回调（移动组件 OnMovementModeChanged 转发，Velocity.Z 为负的下落速度）。 */
 	void OnLandedWithImpact(double FallSpeedCmPerSecond);
 
+	/**
+	 * Labels and scales the next landing while preserving the shared collision
+	 * damage formula. Negative overrides use the component defaults.
+	 */
+	void ArmNextLandingSource(
+		FName Source,
+		double MinimumFallSpeedOverride = -1.0,
+		double RadiusScale = 1.0,
+		double DamageScale = 1.0,
+		double MaximumDamageOverride = -1.0);
+
+	/** One airborne Vector Gun shot may consume the setup created by Lift Fork. */
+	void PrimeLiftForkVectorCombo() { bLiftForkVectorComboPrimed = true; }
+	bool IsLiftForkVectorComboPrimed() const { return bLiftForkVectorComboPrimed; }
+	bool ConsumeLiftForkVectorCombo();
+
 	/** 碰撞反应组件监听此事件；只广播事实，不在碰撞组件内嵌具体反应。 */
 	FVectorWallImpactNativeSignature OnWallImpact;
 
@@ -106,5 +122,17 @@ private:
 	void ResolveSurfaceCollision(double ImpactSpeedCmPerSecond);
 
 	/** 结算落地震荡 AOE（对半径内除自己外的稳定目标）。 */
-	void ResolveLandingShock(double FallSpeedCmPerSecond);
+	void ResolveLandingShock(
+		double FallSpeedCmPerSecond,
+		FName LandingSource,
+		double RadiusScale,
+		double DamageScale,
+		double MaximumDamageOverride);
+
+	FName PendingLandingSource = NAME_None;
+	double PendingLandingMinimumFallSpeedOverride = -1.0;
+	double PendingLandingRadiusScale = 1.0;
+	double PendingLandingDamageScale = 1.0;
+	double PendingLandingMaximumDamageOverride = -1.0;
+	bool bLiftForkVectorComboPrimed = false;
 };

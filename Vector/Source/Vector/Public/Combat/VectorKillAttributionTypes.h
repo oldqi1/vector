@@ -18,6 +18,9 @@ enum class EVectorKillCause : uint8
 	/** 冲量锤直接锤死（保底路径，物理非唯一解的证据）。 */
 	Hammer,
 
+	/** Vector gun direct damage; later body/wall collisions keep their physical cause. */
+	VectorGun,
+
 	/** 被推/冲锋撞墙自伤致死（推墙流）。 */
 	WallCollision,
 

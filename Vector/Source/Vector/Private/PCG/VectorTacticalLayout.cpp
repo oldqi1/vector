@@ -13,6 +13,76 @@ namespace VectorTacticalLayoutInternal
 		| EVectorPhysicsOpportunity::CrowdReceiver
 		| EVectorPhysicsOpportunity::HeightDrop;
 
+	void ConfigureCircuit(FVectorTacticalModuleDefinition& Module)
+	{
+		switch (Module.Type)
+		{
+		case EVectorTacticalModuleType::OpenBowl:
+			Module.Sources = { TEXT("ChargerLane"), TEXT("VectorInjection") };
+			Module.Converters = { TEXT("KineticRail"), TEXT("CablePost") };
+			Module.Receivers = { TEXT("CrowdWell"), TEXT("SplitWall") };
+			Module.RecoveryPockets = { TEXT("SouthPocket") };
+			Module.SupportedToolVerbs = { TEXT("BaitCharge"), TEXT("CableRoute"), TEXT("VectorInject") };
+			Module.EnemyFunctionalSlots = { TEXT("Source"), TEXT("Ammunition"), TEXT("Receiver") };
+			Module.Recipes = {
+				TEXT("BaitCharge>KineticRail>CrowdWell"),
+				TEXT("CableRoute>ReceiverHold>SplitWall") };
+			Module.RewardBias = TEXT("Impulse");
+			break;
+		case EVectorTacticalModuleType::HardLane:
+			Module.Sources = { TEXT("ChargerLane"), TEXT("VectorInjection") };
+			Module.Converters = { TEXT("AnchorPost"), TEXT("UpperRamp") };
+			Module.Receivers = { TEXT("FractureWall"), TEXT("DropReceiver") };
+			Module.RecoveryPockets = { TEXT("SideAlcove") };
+			Module.SupportedToolVerbs = { TEXT("BaitCharge"), TEXT("AnchorTear"), TEXT("LiftConvert") };
+			Module.EnemyFunctionalSlots = { TEXT("Source"), TEXT("Receiver"), TEXT("Ammunition") };
+			Module.Recipes = {
+				TEXT("BaitCharge>AnchorPost>FractureWall"),
+				TEXT("AnchorTear>UpperRamp>DropReceiver") };
+			Module.RewardBias = TEXT("Recharge");
+			break;
+		case EVectorTacticalModuleType::HeightShelf:
+			Module.Sources = { TEXT("GravityVent"), TEXT("VectorInjection") };
+			Module.Converters = { TEXT("LiftShelf"), TEXT("CableSpan") };
+			Module.Receivers = { TEXT("LowerCrowd"), TEXT("FractureWall") };
+			Module.RecoveryPockets = { TEXT("UpperLanding") };
+			Module.SupportedToolVerbs = { TEXT("LiftConvert"), TEXT("CableRoute"), TEXT("VectorInject") };
+			Module.EnemyFunctionalSlots = { TEXT("Receiver"), TEXT("Source"), TEXT("Ammunition") };
+			Module.Recipes = {
+				TEXT("GravityVent>LiftConvert>LowerCrowd"),
+				TEXT("CableRoute>HeightDrop>FractureWall") };
+			Module.RewardBias = TEXT("Range");
+			break;
+		case EVectorTacticalModuleType::SlickCross:
+			Module.Sources = { TEXT("ChargerLane"), TEXT("VectorInjection") };
+			Module.Converters = { TEXT("LowFrictionCross"), TEXT("CablePost") };
+			Module.Receivers = { TEXT("CrossTraffic"), TEXT("HeavyReceiver") };
+			Module.RecoveryPockets = { TEXT("DryIsland") };
+			Module.SupportedToolVerbs = { TEXT("ModifyFriction"), TEXT("CableRoute"), TEXT("BaitCharge") };
+			Module.EnemyFunctionalSlots = { TEXT("Source"), TEXT("Ammunition"), TEXT("Receiver") };
+			Module.Recipes = {
+				TEXT("ModifyFriction>CrossTraffic>HeavyReceiver"),
+				TEXT("BaitCharge>CableRoute>CrossTraffic") };
+			Module.RewardBias = TEXT("Capacity");
+			break;
+		case EVectorTacticalModuleType::BossRing:
+			Module.Sources = { TEXT("BossCharge"), TEXT("KineticOrb") };
+			Module.Converters = { TEXT("AnchorModule"), TEXT("HeightModule") };
+			Module.Receivers = { TEXT("BossAnchor"), TEXT("ExposedCore") };
+			Module.RecoveryPockets = { TEXT("OuterRing") };
+			Module.SupportedToolVerbs = { TEXT("AnchorTear"), TEXT("LiftConvert"), TEXT("VectorInject") };
+			Module.EnemyFunctionalSlots = { TEXT("Source"), TEXT("Ammunition"), TEXT("Receiver") };
+			Module.Recipes = {
+				TEXT("BossCharge>AnchorModule>BossAnchor"),
+				TEXT("KineticOrb>HeightModule>ExposedCore") };
+			Module.RewardBias = TEXT("CoreSample");
+			break;
+		default:
+			Module.RecoveryPockets = { TEXT("SafeFloor") };
+			break;
+		}
+	}
+
 	FVectorTacticalModuleDefinition MakeModule(
 		const TCHAR* Id,
 		const EVectorTacticalModuleType Type,
@@ -28,6 +98,7 @@ namespace VectorTacticalLayoutInternal
 		Module.EnemyBudget = EnemyBudget;
 		Module.HeightLayerCount = FMath::Max(1, HeightLayerCount);
 		Module.MaximumHeightDifferenceCm = FMath::Max(0.0, MaximumHeightDifferenceCm);
+		ConfigureCircuit(Module);
 		return Module;
 	}
 
@@ -156,6 +227,29 @@ bool FVectorTacticalModuleDefinition::HasOpportunity(
 	return EnumHasAnyFlags(Opportunities, Opportunity);
 }
 
+bool FVectorTacticalModuleDefinition::HasCompleteCircuit() const
+{
+	return !Sources.IsEmpty() && !Converters.IsEmpty() && !Receivers.IsEmpty()
+		&& !RecoveryPockets.IsEmpty();
+}
+
+bool FVectorTacticalModuleDefinition::HasDistinctOpenings() const
+{
+	return SupportedToolVerbs.Num() >= 2
+		&& SupportedToolVerbs[0] != SupportedToolVerbs[1];
+}
+
+FString FVectorTacticalModuleDefinition::DescribeCircuit() const
+{
+	return FString::Printf(
+		TEXT("source=%s converter=%s receiver=%s recovery=%s openings=%d recipes=%d reward=%s"),
+		Sources.IsEmpty() ? TEXT("NONE") : *Sources[0].ToString(),
+		Converters.IsEmpty() ? TEXT("NONE") : *Converters[0].ToString(),
+		Receivers.IsEmpty() ? TEXT("NONE") : *Receivers[0].ToString(),
+		RecoveryPockets.IsEmpty() ? TEXT("NONE") : *RecoveryPockets[0].ToString(),
+		SupportedToolVerbs.Num(), Recipes.Num(), *RewardBias.ToString());
+}
+
 bool FVectorTacticalLayout::HasOpportunity(const EVectorPhysicsOpportunity Opportunity) const
 {
 	for (const FVectorTacticalModuleDefinition& Module : Modules)
@@ -275,6 +369,22 @@ bool FVectorTacticalGenerator::Validate(
 			|| Module.CountOpportunities() < 3)
 		{
 			OutFailureReason = FString::Printf(TEXT("module lacks tactical affordances: %s"),
+				*Module.ModuleId.ToString());
+			return false;
+		}
+		if (!Module.HasCompleteCircuit() || !Module.HasDistinctOpenings()
+			|| Module.Recipes.Num() < 2)
+		{
+			OutFailureReason = FString::Printf(
+				TEXT("module lacks a two-route combat circuit: %s %s"),
+				*Module.ModuleId.ToString(), *Module.DescribeCircuit());
+			return false;
+		}
+		if (!Module.EnemyFunctionalSlots.Contains(FName(TEXT("Source")))
+			|| !Module.EnemyFunctionalSlots.Contains(FName(TEXT("Receiver"))))
+		{
+			OutFailureReason = FString::Printf(
+				TEXT("enemy ecology does not close circuit: %s"),
 				*Module.ModuleId.ToString());
 			return false;
 		}

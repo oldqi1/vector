@@ -4,6 +4,7 @@
 
 #include "Combat/VectorEnemy.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/GameModeBase.h"
@@ -12,6 +13,8 @@
 #include "Gameplay/VectorCharacterMovementComponent.h"
 #include "Impact/VectorImpactMath.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "Navigation/CrowdFollowingComponent.h"
+#include "NavigationSystem.h"
 #include "Stability/VectorStabilityComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVectorEnemyAI, Log, All);
@@ -30,9 +33,21 @@ namespace
 	constexpr double DropAttackVerticalSpeedCmPerSecond = 220.0;
 	constexpr double DropAttackWarmupSeconds = 0.65;
 	constexpr double DropAttackCooldownSeconds = 4.0;
+	constexpr double PathRefreshIntervalSeconds = 0.30;
+	constexpr double PathGoalMovementThresholdCm = 110.0;
+	constexpr double StuckSampleIntervalSeconds = 0.40;
+	constexpr double StuckMovementThresholdCm = 18.0;
+	constexpr double StuckRecoveryThresholdSeconds = 1.20;
+	constexpr double RecoveryMoveDurationSeconds = 0.55;
+	constexpr double RecoveryLateralDistanceCm = 260.0;
+	constexpr double MinimumEngagementRadiusCm = 165.0;
+	constexpr double EngagementRadiusStepCm = 25.0;
+	constexpr double EngagementGoalAcceptanceRadiusCm = 65.0;
 }
 
-AVectorEnemyController::AVectorEnemyController()
+AVectorEnemyController::AVectorEnemyController(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UCrowdFollowingComponent>(
+		TEXT("PathFollowingComponent")))
 {
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = true;
@@ -42,6 +57,37 @@ void AVectorEnemyController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
 	ControlledEnemy = Cast<AVectorEnemy>(InPawn);
+	PathRefreshRemainingSeconds = 0.0;
+	StuckSampleRemainingSeconds = StuckSampleIntervalSeconds;
+	StuckAccumulatedSeconds = 0.0;
+	RecoveryMoveRemainingSeconds = 0.0;
+	LastStuckSampleLocation = InPawn ? InPawn->GetActorLocation() : FVector::ZeroVector;
+	bHasPathGoal = false;
+	const uint32 SlotIndex = InPawn ? InPawn->GetUniqueID() : 0u;
+	// Golden-angle spacing keeps sequentially spawned enemies distributed around
+	// the player instead of clustering adjacent object-name hashes.
+	const double SlotAngleDegrees = FMath::Fmod(
+		static_cast<double>(SlotIndex) * 137.507764, 360.0);
+	EngagementAngleRadians = FMath::DegreesToRadians(SlotAngleDegrees);
+	EngagementRadiusCm = MinimumEngagementRadiusCm
+		+ static_cast<double>(SlotIndex % 3u) * EngagementRadiusStepCm;
+	if (UCrowdFollowingComponent* CrowdFollowing =
+		Cast<UCrowdFollowingComponent>(GetPathFollowingComponent()))
+	{
+		CrowdFollowing->SetCrowdSimulationState(ECrowdSimulationState::Enabled);
+		CrowdFollowing->SetCrowdObstacleAvoidance(true);
+		CrowdFollowing->SetCrowdSeparation(true);
+		CrowdFollowing->SetCrowdSeparationWeight(6.0f);
+		CrowdFollowing->SetCrowdCollisionQueryRange(520.0f);
+		CrowdFollowing->SetCrowdPathOptimizationRange(1200.0f);
+		CrowdFollowing->SetCrowdAvoidanceQuality(ECrowdAvoidanceQuality::High);
+		CrowdFollowing->SetCrowdAnticipateTurns(true);
+		CrowdFollowing->SetCrowdOptimizeTopology(true);
+		UE_LOG(LogVectorEnemyAI, Log,
+			TEXT("Enemy crowd steering configured: enemy=%s separation=YES avoidance=HIGH slotAngle=%.0f slotRadius=%.0f check=PASS"),
+			*GetNameSafe(InPawn), FMath::RadiansToDegrees(EngagementAngleRadians),
+			EngagementRadiusCm);
+	}
 }
 
 void AVectorEnemyController::OnUnPossess()
@@ -69,6 +115,10 @@ void AVectorEnemyController::Tick(const float DeltaSeconds)
 		0.0, DropAttackCooldownRemainingSeconds - DeltaSeconds);
 	PathFailureLogCooldownRemainingSeconds = FMath::Max(
 		0.0, PathFailureLogCooldownRemainingSeconds - DeltaSeconds);
+	PathRefreshRemainingSeconds = FMath::Max(
+		0.0, PathRefreshRemainingSeconds - DeltaSeconds);
+	RecoveryMoveRemainingSeconds = FMath::Max(
+		0.0, RecoveryMoveRemainingSeconds - DeltaSeconds);
 
 	if (bPreparingDropAttack)
 	{
@@ -186,6 +236,74 @@ void AVectorEnemyController::Tick(const float DeltaSeconds)
 		return;
 	}
 
+	// A path request every frame continuously restarts local steering at seams and
+	// makes crowds look as if they are glued to grid edges. Sample actual travel,
+	// then briefly route sideways when a valid moving request makes no progress.
+	StuckSampleRemainingSeconds -= DeltaSeconds;
+	if (StuckSampleRemainingSeconds <= 0.0)
+	{
+		const FVector CurrentLocation = ControlledEnemy->GetActorLocation();
+		const double TravelDistance = FVector::Dist2D(CurrentLocation, LastStuckSampleLocation);
+		const UPathFollowingComponent* PathFollowing = GetPathFollowingComponent();
+		const bool bExpectedToMove = PathFollowing
+			&& PathFollowing->GetStatus() == EPathFollowingStatus::Moving
+			&& FVector::Dist2D(CurrentLocation, PlayerPawn->GetActorLocation())
+				> MoveAcceptanceRadiusCm * 1.5;
+		StuckAccumulatedSeconds = bExpectedToMove && TravelDistance < StuckMovementThresholdCm
+			? StuckAccumulatedSeconds + StuckSampleIntervalSeconds
+			: 0.0;
+		LastStuckSampleLocation = CurrentLocation;
+		StuckSampleRemainingSeconds = StuckSampleIntervalSeconds;
+
+		if (StuckAccumulatedSeconds >= StuckRecoveryThresholdSeconds)
+		{
+			int32 NearbyPawnBlockers = 0;
+			for (TActorIterator<APawn> It(GetWorld()); It; ++It)
+			{
+				if (*It != ControlledEnemy
+					&& FVector::DistSquared2D(It->GetActorLocation(), CurrentLocation)
+						<= FMath::Square(260.0))
+				{
+					++NearbyPawnBlockers;
+				}
+			}
+			const FVector TowardPlayer = (PlayerPawn->GetActorLocation() - CurrentLocation).GetSafeNormal2D();
+			const FVector Lateral(-TowardPlayer.Y, TowardPlayer.X, 0.0);
+			const double Side = (RecoveryAttemptCount++ % 2 == 0) ? 1.0 : -1.0;
+			const FVector RawRecoveryPoint = CurrentLocation
+				+ Lateral * Side * RecoveryLateralDistanceCm
+				+ TowardPlayer * 70.0;
+			FNavLocation ProjectedRecoveryPoint;
+			UNavigationSystemV1* NavigationSystem =
+				FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+			const bool bProjected = NavigationSystem
+				&& NavigationSystem->ProjectPointToNavigation(
+					RawRecoveryPoint, ProjectedRecoveryPoint, FVector(220.0, 220.0, 180.0));
+			if (bProjected)
+			{
+				MoveToLocation(ProjectedRecoveryPoint.Location, 45.0, true, true);
+				RecoveryMoveRemainingSeconds = RecoveryMoveDurationSeconds;
+				PathRefreshRemainingSeconds = RecoveryMoveDurationSeconds;
+				UE_LOG(LogVectorEnemyAI, Log,
+					TEXT("Enemy path recovery: enemy=%s travel=%.0f stuck=%.1fs nearbyPawns=%d side=%+.0f point=%s check=QUEUED"),
+					*ControlledEnemy->GetName(), TravelDistance, StuckAccumulatedSeconds,
+					NearbyPawnBlockers, Side, *ProjectedRecoveryPoint.Location.ToCompactString());
+			}
+			else
+			{
+				UE_LOG(LogVectorEnemyAI, Warning,
+					TEXT("Enemy path recovery: enemy=%s point=%s check=NO_NAV"),
+					*ControlledEnemy->GetName(), *RawRecoveryPoint.ToCompactString());
+			}
+			StuckAccumulatedSeconds = 0.0;
+		}
+	}
+
+	if (RecoveryMoveRemainingSeconds > 0.0)
+	{
+		return;
+	}
+
 	const FVector ToPlayer = PlayerPawn->GetActorLocation() - ControlledEnemy->GetActorLocation();
 	if (ControlledEnemy->Archetype != EVectorEnemyArchetype::ChargerRammer
 		&& DropAttackCooldownRemainingSeconds <= 0.0
@@ -206,17 +324,48 @@ void AVectorEnemyController::Tick(const float DeltaSeconds)
 
 	// 恢复被暂停的路径跟随，再继续追击。
 	ResumePathFollowingIfPaused();
-	const EPathFollowingRequestResult::Type PathRequest =
-		MoveToActor(PlayerPawn, MoveAcceptanceRadiusCm);
+	const FVector PlayerLocation = PlayerPawn->GetActorLocation();
+	const FVector EngagementOffset(
+		FMath::Cos(EngagementAngleRadians) * EngagementRadiusCm,
+		FMath::Sin(EngagementAngleRadians) * EngagementRadiusCm,
+		0.0);
+	const FVector RawPursuitGoal = PlayerLocation + EngagementOffset;
+	const bool bGoalMoved = !bHasPathGoal
+		|| FVector::DistSquared2D(RawPursuitGoal, LastPathGoal)
+			>= FMath::Square(PathGoalMovementThresholdCm);
+	const UPathFollowingComponent* PathFollowing = GetPathFollowingComponent();
+	const bool bNeedsRequest = !PathFollowing
+		|| PathFollowing->GetStatus() == EPathFollowingStatus::Idle
+		|| PathFollowing->GetStatus() == EPathFollowingStatus::Waiting;
+	if (PathRefreshRemainingSeconds > 0.0 && !bGoalMoved && !bNeedsRequest)
+	{
+		return;
+	}
+	FNavLocation ProjectedPursuitGoal;
+	UNavigationSystemV1* NavigationSystem =
+		FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	const bool bProjectedPursuitGoal = NavigationSystem
+		&& NavigationSystem->ProjectPointToNavigation(
+			RawPursuitGoal, ProjectedPursuitGoal, FVector(240.0, 240.0, 180.0));
+	const FVector PursuitGoal = bProjectedPursuitGoal
+		? ProjectedPursuitGoal.Location : PlayerLocation;
+	const EPathFollowingRequestResult::Type PathRequest = MoveToLocation(
+		PursuitGoal, EngagementGoalAcceptanceRadiusCm,
+		false, true, false, true, nullptr, true);
+	PathRefreshRemainingSeconds = PathRefreshIntervalSeconds;
+	LastPathGoal = RawPursuitGoal;
+	bHasPathGoal = PathRequest != EPathFollowingRequestResult::Failed;
 	if (PathRequest == EPathFollowingRequestResult::Failed
 		&& PathFailureLogCooldownRemainingSeconds <= 0.0)
 	{
 		PathFailureLogCooldownRemainingSeconds = 1.0;
 		UE_LOG(LogVectorEnemyAI, Warning,
-			TEXT("Enemy path request failed: enemy=%s from=%s player=%s deltaZ=%.0f"),
+			TEXT("Enemy path request failed: enemy=%s from=%s player=%s slot=%s projected=%s deltaZ=%.0f"),
 			*ControlledEnemy->GetName(),
 			*ControlledEnemy->GetActorLocation().ToCompactString(),
-			*PlayerPawn->GetActorLocation().ToCompactString(), ToPlayer.Z);
+			*PlayerPawn->GetActorLocation().ToCompactString(),
+			*RawPursuitGoal.ToCompactString(),
+			bProjectedPursuitGoal ? TEXT("YES") : TEXT("no"), ToPlayer.Z);
 	}
 }
 

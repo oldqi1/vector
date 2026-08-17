@@ -212,7 +212,7 @@ void AVectorTestDummy::UpdateStaggerPresentation()
 
 	if (State == EVectorStabilityState::Downed)
 	{
-		BodyMesh->SetRelativeRotation(FRotator(90.0, 0.0, 0.0));
+		BodyMesh->SetRelativeRotation(BaseBodyRotation + FRotator(90.0, 0.0, 0.0));
 		if (BodyMaterial)
 		{
 			BodyMaterial->SetVectorParameterValue(TEXT("Color"), BaseBodyColor * 0.45f);
@@ -220,7 +220,7 @@ void AVectorTestDummy::UpdateStaggerPresentation()
 	}
 	else
 	{
-		BodyMesh->SetRelativeRotation(FRotator::ZeroRotator);
+		BodyMesh->SetRelativeRotation(BaseBodyRotation);
 		if (BodyMaterial)
 		{
 			// 攻击预警或失衡时白闪；结束后准确恢复当前质量档原色。
@@ -296,7 +296,9 @@ void AVectorTestDummy::ApplyMassPresentation()
 	}
 
 	BaseBodyScale = Scale;
+	BaseBodyRotation = FRotator::ZeroRotator;
 	BodyMesh->SetRelativeScale3D(BaseBodyScale);
+	BodyMesh->SetRelativeRotation(BaseBodyRotation);
 
 	// Cube 原点在网格中心：把方块中心抬到"地面以上自身高度一半"，
 	// 使方块底部正好落在胶囊底部（= 地面），避免半埋入地。

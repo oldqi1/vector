@@ -90,6 +90,9 @@ protected:
 	/** 质量档基础尺寸；预警脉冲结束后精确还原。 */
 	FVector BaseBodyScale = FVector(0.9f);
 
+	/** Presentation asset's upright orientation; stagger poses are relative to it. */
+	FRotator BaseBodyRotation = FRotator::ZeroRotator;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> BodyMaterial;
 

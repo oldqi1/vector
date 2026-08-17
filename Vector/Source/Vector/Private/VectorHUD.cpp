@@ -6,6 +6,7 @@
 #include "Combat/VectorActionLockComponent.h"
 #include "Combat/VectorGravityHookComponent.h"
 #include "Combat/VectorHealthComponent.h"
+#include "Combat/VectorGunComponent.h"
 #include "Combat/VectorTestDummy.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
@@ -17,6 +18,7 @@
 #include "Hunt/VectorHuntProgressComponent.h"
 #include "Physics/VectorPhysicsModifierComponent.h"
 #include "PCG/VectorPCGEncounterDirector.h"
+#include "Progression/VectorRunProgressionComponent.h"
 #include "VectorCharacter.h"
 #include "VectorGameMode.h"
 
@@ -106,7 +108,7 @@ void AVectorHUD::DrawHUD()
 			{
 				static const TCHAR* EquipmentLabels[] =
 				{
-					TEXT("1 HAMMER"),
+					TEXT("1 VECTOR"),
 					TEXT("2 CABLE"),
 					TEXT("3 LUBE"),
 					TEXT("4 FLOAT"),
@@ -137,8 +139,22 @@ void AVectorHUD::DrawHUD()
 						GEngine->GetSmallFont(), 0.65f, false);
 				}
 			}
+			const AVectorCharacter* EquipmentCharacter =
+				Cast<AVectorCharacter>(PlayerPawn);
+			const UVectorRunProgressionComponent* HintProgression =
+				PlayerPawn->FindComponentByClass<UVectorRunProgressionComponent>();
+			const bool bSlamModuleInstalled = HintProgression
+				&& HintProgression->HasRuleModule(
+					EVectorRunModuleType::LiftVectorCoupler);
+			const FString ControlHint = EquipmentCharacter
+				&& EquipmentCharacter->GetSelectedEquipmentSlot()
+					== EVectorEquipmentSlot::LiftFork
+				? (bSlamModuleInstalled
+					? TEXT("5 LIFT + COUPLER  |  TAP: LOW SHOCK  |  HOLD: AUTO SLAM  |  DRAG: MANUAL")
+					: TEXT("5 LIFT  |  LMB: LIFT + LOW SHOCK  |  FOLLOW WITH 1 VECTOR GUN"))
+				: TEXT("1 Vector Gun  2 Cable  3 Lube  4 Float  5 Lift  |  LMB Use  |  RMB Drag Camera");
 			DrawText(
-				TEXT("1 Hammer  2 Cable  3 Lube  4 Float  5 Lift  |  LMB Use  |  RMB Drag Camera"),
+				ControlHint,
 				FLinearColor(0.85f, 0.9f, 1.0f),
 				40.0f,
 				Canvas->ClipY - 102.0f,
@@ -155,6 +171,51 @@ void AVectorHUD::DrawHUD()
 					GEngine->GetSmallFont(),
 					0.85f,
 					false);
+			}
+			if (const UVectorGunComponent* Gun =
+				PlayerPawn->FindComponentByClass<UVectorGunComponent>())
+			{
+				DrawText(
+					FString::Printf(TEXT("VECTOR CELLS: %d/%d  RANGE %.0f  IMPULSE %.0f"),
+						Gun->GetCurrentCells(), Gun->GetMaximumCells(),
+						Gun->GetEffectiveRangeCm(), Gun->GetEffectiveImpulseBudget()),
+					FLinearColor(0.15f, 0.95f, 1.0f),
+					40.0f, Canvas->ClipY - 168.0f,
+					GEngine->GetSmallFont(), 0.82f, false);
+			}
+			if (const UVectorRunProgressionComponent* Progression =
+				PlayerPawn->FindComponentByClass<UVectorRunProgressionComponent>())
+			{
+				const FVectorRunCalibrationState& State = Progression->GetCalibrationState();
+				DrawText(
+					FString::Printf(TEXT("CALIBRATION  RANGE L%d  IMPULSE L%d  BATTERY L%d  RECHARGE L%d  MODULE %s"),
+						State.RangeLevel, State.ImpulseLevel,
+						State.CapacityLevel, State.RechargeLevel,
+						*LexToString(Progression->GetSelectedRuleModule())),
+					FLinearColor(0.8f, 0.85f, 0.95f),
+					40.0f, Canvas->ClipY - 190.0f,
+					GEngine->GetSmallFont(), 0.75f, false);
+				if (Progression->HasPendingChoice())
+				{
+					const float OfferWidth = 900.0f;
+					const float OfferX = (Canvas->ClipX - OfferWidth) * 0.5f;
+					const float OfferY = Canvas->ClipY * 0.22f;
+					DrawRect(FLinearColor(0.01f, 0.025f, 0.04f, 0.92f),
+						OfferX, OfferY, OfferWidth, 92.0f);
+					DrawText(
+						Progression->HasPendingRuleModule()
+							? TEXT("SYSTEM UPGRADE - INSTALL ONE RULE MODULE")
+							: TEXT("ROOM CLEAR - INSTALL ONE BASE CALIBRATION"),
+						FLinearColor(0.15f, 0.95f, 1.0f), OfferX + 210.0f, OfferY + 12.0f,
+						GEngine->GetMediumFont(), 0.9f, false);
+					DrawText(
+						FString::Printf(TEXT("[Z] %s     [X] %s     [C] %s"),
+							*Progression->GetPendingChoiceLabel(0),
+							*Progression->GetPendingChoiceLabel(1),
+							*Progression->GetPendingChoiceLabel(2)),
+						FLinearColor::White, OfferX + 72.0f, OfferY + 54.0f,
+						GEngine->GetSmallFont(), 0.9f, false);
+				}
 			}
 			if (const UVectorActionLockComponent* Lock =
 				PlayerPawn->FindComponentByClass<UVectorActionLockComponent>(); Lock && Lock->IsLocked())
@@ -266,26 +327,37 @@ void AVectorHUD::DrawHUD()
 			}
 
 			FString PhaseLabel = TEXT("ANCHORED");
+			FString BossObjective = TEXT("BREAK SHELL: VECTOR CYAN ORB INTO EITHER SIDE");
 			switch (Boss->GetBossPhase())
 			{
 			case EVectorPhysicsBossPhase::ExposedShell:
 				PhaseLabel = TEXT("EXPOSED");
+				BossObjective = TEXT("ONE ANCHOR LEFT: STRIKE THE OTHER SIDE");
 				break;
 			case EVectorPhysicsBossPhase::Overload:
 				PhaseLabel = TEXT("OVERLOAD");
+				BossObjective = TEXT("CORE OPEN: BUILD SPEED AND COLLIDE");
 				break;
 			case EVectorPhysicsBossPhase::Defeated:
 				PhaseLabel = TEXT("DEFEATED");
+				BossObjective = TEXT("PHYSICS CIRCUIT COMPLETE");
 				break;
 			case EVectorPhysicsBossPhase::AnchoredShell:
 			default:
 				break;
+			}
+			if (Boss->IsStaggerResolveActive())
+			{
+				PhaseLabel += TEXT(" | RESOLVE");
 			}
 			DrawHealthBar(
 				Canvas->ClipX * 0.5f - 260.0f, 34.0f,
 				520.0f, 24.0f,
 				BossHealth->GetHealth(), BossHealth->GetMaxHealth(),
 				FString::Printf(TEXT("MAGNET-SHELL BEAST  [%s]"), *PhaseLabel), true);
+			DrawText(BossObjective, FLinearColor(0.2f, 0.9f, 1.0f),
+				Canvas->ClipX * 0.5f - 210.0f, 64.0f,
+				GEngine->GetSmallFont(), 0.78f, false);
 			break;
 		}
 	}

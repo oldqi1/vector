@@ -24,3 +24,10 @@ Logs/
 
 # Local collaboration memory
 .workbuddy/
+
+# Local packaged builds
+Builds/
+
+# Python bytecode/cache
+__pycache__/
+*.py[cod]

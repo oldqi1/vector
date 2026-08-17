@@ -3,6 +3,7 @@
 #include "Gameplay/VectorCharacterMovementComponent.h"
 
 #include "Combat/VectorImpactCollisionComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "GameFramework/Character.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVectorMovement, Log, All);
@@ -70,6 +71,18 @@ bool UVectorCharacterMovementComponent::QueueDirectionalVelocityOverride(
 	const FVector& WorldDirection,
 	const double TargetSpeedCmPerSecond)
 {
+	FVector WorldVelocity = FVector::ZeroVector;
+	return ComputeDirectionalVelocityOverride(
+		WorldDirection, TargetSpeedCmPerSecond, WorldVelocity)
+		&& QueueWorldVelocityOverride(WorldVelocity);
+}
+
+bool UVectorCharacterMovementComponent::ComputeDirectionalVelocityOverride(
+	const FVector& WorldDirection,
+	const double TargetSpeedCmPerSecond,
+	FVector& OutWorldVelocity) const
+{
+	OutWorldVelocity = FVector::ZeroVector;
 	if (!VectorCharacterMovement::IsFiniteVector(WorldDirection)
 		|| !FMath::IsFinite(TargetSpeedCmPerSecond))
 	{
@@ -84,7 +97,8 @@ bool UVectorCharacterMovementComponent::QueueDirectionalVelocityOverride(
 	const FVector BaseVelocity = GetEffectiveVelocityForPendingStep();
 	const double AlongDirection = FVector::DotProduct(BaseVelocity, Direction);
 	const FVector PerpendicularVelocity = BaseVelocity - Direction * AlongDirection;
-	return QueueWorldVelocityOverride(PerpendicularVelocity + Direction * TargetSpeedCmPerSecond);
+	OutWorldVelocity = PerpendicularVelocity + Direction * TargetSpeedCmPerSecond;
+	return VectorCharacterMovement::IsFiniteVector(OutWorldVelocity);
 }
 
 bool UVectorCharacterMovementComponent::QueueAirborneWorldVelocityOverride(
@@ -257,6 +271,12 @@ void UVectorCharacterMovementComponent::HandleImpact(
 		bIsImpulseDriven ? 1 : 0,
 		Velocity.Size(),
 		*Velocity.ToCompactString());
+	if (Hit.Component.IsValid()
+		&& Hit.Component->GetCollisionObjectType() != ECC_WorldStatic)
+	{
+		OnDynamicInterference.Broadcast(Hit);
+	}
+	BroadcastWorldStaticImpact(Hit, TEXT("BLOCKING"));
 
 	// 只有冲量驱动的物理运动才结算碰撞连锁；正常行走/站桩碰撞不产生伤害。
 	if (!bIsImpulseDriven || !CharacterOwner)
@@ -269,6 +289,38 @@ void UVectorCharacterMovementComponent::HandleImpact(
 	{
 		ImpactComponent->OnCharacterImpact(Hit, MoveDelta);
 	}
+}
+
+void UVectorCharacterMovementComponent::ProcessLanded(
+	const FHitResult& Hit,
+	const float RemainingTime,
+	const int32 Iterations)
+{
+	// A walkable falling hit routes directly through ProcessLanded and skips
+	// HandleImpact. Publish it here so verification observes the real first
+	// surface instead of waiting for a later wall collision.
+	BroadcastWorldStaticImpact(Hit, TEXT("LANDING"));
+	Super::ProcessLanded(Hit, RemainingTime, Iterations);
+}
+
+void UVectorCharacterMovementComponent::BroadcastWorldStaticImpact(
+	const FHitResult& Hit,
+	const TCHAR* Source)
+{
+	if (!Hit.Component.IsValid()
+		|| Hit.Component->GetCollisionObjectType() != ECC_WorldStatic)
+	{
+		return;
+	}
+
+	if (OnWorldStaticImpact.IsBound())
+	{
+		UE_LOG(LogVectorMovement, Log,
+			TEXT("WorldStatic impact published: owner=%s source=%s impact=%s location=%s check=PASS"),
+			*GetNameSafe(CharacterOwner), Source,
+			*Hit.ImpactPoint.ToCompactString(), *Hit.Location.ToCompactString());
+	}
+	OnWorldStaticImpact.Broadcast(Hit);
 }
 
 void UVectorCharacterMovementComponent::RequestDirectMove(

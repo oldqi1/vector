@@ -10,6 +10,8 @@
 #include "Combat/VectorImpulseHammerComponent.h"
 #include "Combat/VectorLiftForkComponent.h"
 #include "Combat/VectorModifierApplicatorComponent.h"
+#include "Combat/VectorGunComponent.h"
+#include "Combat/VectorTrajectoryPreviewComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -26,6 +28,7 @@
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
 #include "Physics/VectorPhysicsModifierComponent.h"
+#include "Progression/VectorRunProgressionComponent.h"
 #include "UObject/ConstructorHelpers.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVectorPlayer, Log, All);
@@ -99,9 +102,12 @@ AVectorCharacter::AVectorCharacter(const FObjectInitializer& ObjectInitializer)
 
 	// 冲量锤装备（S02）：左键按住蓄力、松开释放水平冲量。
 	ImpulseHammer = CreateDefaultSubobject<UVectorImpulseHammerComponent>(TEXT("ImpulseHammer"));
+	VectorGun = CreateDefaultSubobject<UVectorGunComponent>(TEXT("VectorGun"));
+	TrajectoryPreview = CreateDefaultSubobject<UVectorTrajectoryPreviewComponent>(TEXT("TrajectoryPreview"));
 	GravityHook = CreateDefaultSubobject<UVectorGravityHookComponent>(TEXT("GravityHook"));
 	ModifierApplicator = CreateDefaultSubobject<UVectorModifierApplicatorComponent>(TEXT("ModifierApplicator"));
 	LiftFork = CreateDefaultSubobject<UVectorLiftForkComponent>(TEXT("LiftFork"));
+	RunProgression = CreateDefaultSubobject<UVectorRunProgressionComponent>(TEXT("RunProgression"));
 
 	// 玩家核心生命（P2 补全）：被敌人撞击/扑击扣血，归零重生。
 	HealthComponent = CreateDefaultSubobject<UVectorHealthComponent>(TEXT("Health"));
@@ -160,6 +166,10 @@ void AVectorCharacter::HandlePlayerDeath()
 	if (ImpulseHammer)
 	{
 		ImpulseHammer->CancelAction();
+	}
+	if (VectorGun)
+	{
+		VectorGun->CancelAction();
 	}
 	if (GravityHook)
 	{
@@ -289,6 +299,9 @@ void AVectorCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		EnhancedInput->BindAction(LubricantInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleLubricantPressed);
 		EnhancedInput->BindAction(BuoyantSporeInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleBuoyantSporePressed);
 		EnhancedInput->BindAction(LiftForkInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleLiftForkPressed);
+		EnhancedInput->BindAction(CalibrationChoiceOneInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleCalibrationChoiceOnePressed);
+		EnhancedInput->BindAction(CalibrationChoiceTwoInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleCalibrationChoiceTwoPressed);
+		EnhancedInput->BindAction(CalibrationChoiceThreeInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleCalibrationChoiceThreePressed);
 		EnhancedInput->BindAction(JumpInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleJumpPressed);
 		EnhancedInput->BindAction(JumpInputAction, ETriggerEvent::Completed, this, &AVectorCharacter::HandleJumpReleased);
 		EnhancedInput->BindAction(ZoomInputAction, ETriggerEvent::Triggered, this, &AVectorCharacter::HandleZoomInput);
@@ -300,6 +313,8 @@ void AVectorCharacter::EnsureRuntimeInput()
 	if (MoveInputAction && LookInputAction && CameraRotateInputAction
 		&& AttackInputAction && SelectHammerInputAction && HookInputAction
 		&& LubricantInputAction && BuoyantSporeInputAction && LiftForkInputAction
+		&& CalibrationChoiceOneInputAction && CalibrationChoiceTwoInputAction
+		&& CalibrationChoiceThreeInputAction
 		&& JumpInputAction && ZoomInputAction && MoveInputMappingContext)
 	{
 		return;
@@ -331,6 +346,13 @@ void AVectorCharacter::EnsureRuntimeInput()
 
 	LiftForkInputAction = NewObject<UInputAction>(this, TEXT("IA_LiftFork"));
 	LiftForkInputAction->ValueType = EInputActionValueType::Boolean;
+
+	CalibrationChoiceOneInputAction = NewObject<UInputAction>(this, TEXT("IA_CalibrationChoiceOne"));
+	CalibrationChoiceOneInputAction->ValueType = EInputActionValueType::Boolean;
+	CalibrationChoiceTwoInputAction = NewObject<UInputAction>(this, TEXT("IA_CalibrationChoiceTwo"));
+	CalibrationChoiceTwoInputAction->ValueType = EInputActionValueType::Boolean;
+	CalibrationChoiceThreeInputAction = NewObject<UInputAction>(this, TEXT("IA_CalibrationChoiceThree"));
+	CalibrationChoiceThreeInputAction->ValueType = EInputActionValueType::Boolean;
 
 	JumpInputAction = NewObject<UInputAction>(this, TEXT("IA_Jump"));
 	JumpInputAction->ValueType = EInputActionValueType::Boolean;
@@ -372,6 +394,9 @@ void AVectorCharacter::EnsureRuntimeInput()
 	MoveInputMappingContext->MapKey(LubricantInputAction, EKeys::Three);
 	MoveInputMappingContext->MapKey(BuoyantSporeInputAction, EKeys::Four);
 	MoveInputMappingContext->MapKey(LiftForkInputAction, EKeys::Five);
+	MoveInputMappingContext->MapKey(CalibrationChoiceOneInputAction, EKeys::Z);
+	MoveInputMappingContext->MapKey(CalibrationChoiceTwoInputAction, EKeys::X);
+	MoveInputMappingContext->MapKey(CalibrationChoiceThreeInputAction, EKeys::C);
 
 	// 空格：跳跃（躲避冲锋/跨障）。
 	MoveInputMappingContext->MapKey(JumpInputAction, EKeys::SpaceBar);
@@ -445,9 +470,9 @@ void AVectorCharacter::HandleAttackPressed()
 	switch (SelectedEquipmentSlot)
 	{
 	case EVectorEquipmentSlot::Hammer:
-		if (ImpulseHammer)
+		if (VectorGun)
 		{
-			ImpulseHammer->StartCharge();
+			VectorGun->Fire();
 		}
 		break;
 	case EVectorEquipmentSlot::CableGun:
@@ -471,7 +496,7 @@ void AVectorCharacter::HandleAttackPressed()
 	case EVectorEquipmentSlot::LiftFork:
 		if (LiftFork)
 		{
-			LiftFork->ActivateFork();
+			LiftFork->BeginForkGesture();
 		}
 		break;
 	default:
@@ -481,13 +506,13 @@ void AVectorCharacter::HandleAttackPressed()
 
 void AVectorCharacter::HandleAttackReleased()
 {
-	if (SelectedEquipmentSlot == EVectorEquipmentSlot::Hammer && ImpulseHammer)
-	{
-		ImpulseHammer->ReleaseCharge();
-	}
-	else if (SelectedEquipmentSlot == EVectorEquipmentSlot::CableGun && GravityHook)
+	if (SelectedEquipmentSlot == EVectorEquipmentSlot::CableGun && GravityHook)
 	{
 		GravityHook->ReleaseHook();
+	}
+	else if (SelectedEquipmentSlot == EVectorEquipmentSlot::LiftFork && LiftFork)
+	{
+		LiftFork->ReleaseForkGesture();
 	}
 }
 
@@ -516,6 +541,30 @@ void AVectorCharacter::HandleLiftForkPressed()
 	SelectEquipment(EVectorEquipmentSlot::LiftFork);
 }
 
+void AVectorCharacter::HandleCalibrationChoiceOnePressed()
+{
+	if (RunProgression)
+	{
+		RunProgression->SelectPendingChoice(0);
+	}
+}
+
+void AVectorCharacter::HandleCalibrationChoiceTwoPressed()
+{
+	if (RunProgression)
+	{
+		RunProgression->SelectPendingChoice(1);
+	}
+}
+
+void AVectorCharacter::HandleCalibrationChoiceThreePressed()
+{
+	if (RunProgression)
+	{
+		RunProgression->SelectPendingChoice(2);
+	}
+}
+
 void AVectorCharacter::SelectEquipment(const EVectorEquipmentSlot NewEquipmentSlot)
 {
 	if (SelectedEquipmentSlot == NewEquipmentSlot)
@@ -523,14 +572,13 @@ void AVectorCharacter::SelectEquipment(const EVectorEquipmentSlot NewEquipmentSl
 		return;
 	}
 
-	if (SelectedEquipmentSlot == EVectorEquipmentSlot::Hammer
-		&& ImpulseHammer && ImpulseHammer->IsCharging())
-	{
-		ImpulseHammer->CancelAction();
-	}
 	if (SelectedEquipmentSlot == EVectorEquipmentSlot::CableGun && GravityHook)
 	{
 		GravityHook->HolsterHook();
+	}
+	else if (SelectedEquipmentSlot == EVectorEquipmentSlot::LiftFork && LiftFork)
+	{
+		LiftFork->CancelAction();
 	}
 
 	SelectedEquipmentSlot = NewEquipmentSlot;
@@ -543,7 +591,7 @@ FString AVectorCharacter::GetSelectedEquipmentLabel() const
 	switch (SelectedEquipmentSlot)
 	{
 	case EVectorEquipmentSlot::Hammer:
-		return TEXT("1 HAMMER");
+		return TEXT("1 VECTOR GUN");
 	case EVectorEquipmentSlot::CableGun:
 		return TEXT("2 CABLE");
 	case EVectorEquipmentSlot::Lubricant:

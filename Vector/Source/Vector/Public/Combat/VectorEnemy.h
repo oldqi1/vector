@@ -8,6 +8,11 @@
 
 class AVectorOrganPickup;
 class UDamageType;
+class UStaticMesh;
+class UStaticMeshComponent;
+class UVectorBreakableAnchorComponent;
+class UVectorEnemyRangedAttackComponent;
+enum class EVectorAnchorGroupSide : uint8;
 
 /**
  * 敌人三型枚举（S04，灰盒期一个类三型配置，攻击行为分化后再拆子类）。
@@ -23,6 +28,12 @@ enum class EVectorEnemyArchetype : uint8
 
 	/** 角槌兽（冲）：追击中周期性冲锋（预警高亮 → 高速冲量），自身是"免费炮弹"。 */
 	ChargerRammer,
+
+	/** Mechanical shell that fires a slow weak-homing arc orb. */
+	ArcShell,
+
+	/** Light aerial unit alternating one and three corrosion-colored physical shots. */
+	CorrosionDrone,
 };
 
 /**
@@ -49,6 +60,7 @@ public:
 	 * instead of destroying it immediately when health reaches zero.
 	 */
 	void PrepareForHammerLethalLaunch();
+	void PrepareForVectorGunLethalLaunch();
 
 	bool IsLethalLaunchCorpse() const { return bLethalLaunchDeathActive; }
 
@@ -88,6 +100,37 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Enemy")
 	TObjectPtr<class UVectorEnemyAttackComponent> AttackComponent;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Enemy")
+	TObjectPtr<UVectorEnemyRangedAttackComponent> RangedAttackComponent;
+
+	/** Heavy archetype's two discrete paired anchor groups. Disabled for other archetypes. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Enemy|Structure")
+	TObjectPtr<UVectorBreakableAnchorComponent> BreakableAnchorComponent;
+
+	/** Greybox left/right anchor silhouettes; imported creature meshes can replace only presentation. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Enemy|Structure|Presentation")
+	TObjectPtr<UStaticMeshComponent> LeftAnchorMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Enemy|Structure|Presentation")
+	TObjectPtr<UStaticMeshComponent> RightAnchorMesh;
+
+	/** CC0 prototype silhouettes. Missing assets fall back to the established greybox cube. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Vector|Enemy|Presentation")
+	TSoftObjectPtr<UStaticMesh> LightPrototypeMesh;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Vector|Enemy|Presentation")
+	TSoftObjectPtr<UStaticMesh> HeavyPrototypeMesh;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Vector|Enemy|Presentation")
+	TSoftObjectPtr<UStaticMesh> ChargerPrototypeMesh;
+
+	/** Bosses and future special enemies can replace the archetype silhouette without new subclasses. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Vector|Enemy|Presentation")
+	TSoftObjectPtr<UStaticMesh> PrototypeMeshOverride;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Vector|Enemy|Presentation")
+	FVector PrototypeMeshScaleOverride = FVector::ZeroVector;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -106,6 +149,9 @@ private:
 	void HandleLethalLaunchSurfaceImpact(double ImpactSpeedCmPerSecond);
 	void ScheduleLethalLaunchDespawn(const TCHAR* Reason);
 	void SpawnOrganDrop(const TCHAR* Reason);
+	void HandleAnchorGroupBroken(EVectorAnchorGroupSide Side, int32 BrokenGroupCount);
+	void UpdateAnchorPresentation();
+	void ApplyPrototypeMeshPresentation();
 
 	bool bLethalLaunchArmed = false;
 	bool bLethalLaunchDeathActive = false;

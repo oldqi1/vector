@@ -25,6 +25,12 @@ bool FVectorCollisionDamageThresholdTest::RunTest(const FString& Parameters)
 		FVectorImpactMath::ComputeCollisionDamage(299.0), 0.0, 1.e-6);
 	TestEqual(TEXT("At threshold -> 0"),
 		FVectorImpactMath::ComputeCollisionDamage(300.0), 0.0, 1.e-6);
+	const double NaturalLiftLandingBase = FVectorImpactMath::ComputeCollisionDamage(
+		520.0, 1.0, 1.5, 300.0, 0.05, 50.0);
+	TestEqual(TEXT("Natural lift landing reuses formula before its low profile scale"),
+		NaturalLiftLandingBase, 16.5, 1.e-6);
+	TestEqual(TEXT("Natural lift landing profile remains low damage"),
+		FMath::Min(NaturalLiftLandingBase * 0.35, 8.0), 5.775, 1.e-6);
 
 	// 刚过阈值：从 0 平滑增长。速度 320，超速 20，0.05/cm/s → 1.0。
 	TestEqual(TEXT("Just above threshold scales linearly"),

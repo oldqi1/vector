@@ -19,7 +19,7 @@ class VECTOR_API AVectorEnemyController : public AAIController
 	GENERATED_BODY()
 
 public:
-	AVectorEnemyController();
+	AVectorEnemyController(const FObjectInitializer& ObjectInitializer);
 
 	virtual void Tick(float DeltaSeconds) override;
 
@@ -63,6 +63,16 @@ private:
 
 	double DropAttackCooldownRemainingSeconds = 0.0;
 	double PathFailureLogCooldownRemainingSeconds = 0.0;
+	double PathRefreshRemainingSeconds = 0.0;
+	double StuckSampleRemainingSeconds = 0.0;
+	double StuckAccumulatedSeconds = 0.0;
+	double RecoveryMoveRemainingSeconds = 0.0;
+	double EngagementAngleRadians = 0.0;
+	double EngagementRadiusCm = 185.0;
+	FVector LastPathGoal = FVector::ZeroVector;
+	FVector LastStuckSampleLocation = FVector::ZeroVector;
+	int32 RecoveryAttemptCount = 0;
+	bool bHasPathGoal = false;
 	bool bPreparingDropAttack = false;
 	double DropAttackWarmupRemainingSeconds = 0.0;
 	FVector LockedDropAttackDirection = FVector::ForwardVector;

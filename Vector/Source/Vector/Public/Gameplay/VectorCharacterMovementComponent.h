@@ -6,6 +6,13 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "VectorCharacterMovementComponent.generated.h"
 
+DECLARE_MULTICAST_DELEGATE_OneParam(
+	FVectorWorldStaticImpactDelegate,
+	const FHitResult&);
+DECLARE_MULTICAST_DELEGATE_OneParam(
+	FVectorDynamicInterferenceDelegate,
+	const FHitResult&);
+
 /**
  * 冲量荒原三维角色移动组件：标准 CharacterMovement + 受控冲量/空中发射队列。
  *
@@ -37,6 +44,16 @@ public:
 	 * 锤击、扑击和冲锋使用此入口；碰撞解算使用完整速度覆盖入口。
 	 */
 	bool QueueDirectionalVelocityOverride(const FVector& WorldDirection, double TargetSpeedCmPerSecond);
+
+	/**
+	 * Builds the exact velocity that QueueDirectionalVelocityOverride would
+	 * submit, without mutating movement state. Runtime previews use this so the
+	 * displayed arc and the executed shot cannot diverge by formula.
+	 */
+	bool ComputeDirectionalVelocityOverride(
+		const FVector& WorldDirection,
+		double TargetSpeedCmPerSecond,
+		FVector& OutWorldVelocity) const;
 
 	/**
 	 * Queue an actual CharacterMovement launch. Unlike the generic CalcVelocity
@@ -74,6 +91,11 @@ public:
 	 */
 	bool IsImpulseDriven() const { return bIsImpulseDriven; }
 
+	/** Native diagnostic hook used to compare a frozen preview with execution. */
+	FVectorWorldStaticImpactDelegate OnWorldStaticImpact;
+	/** A blocking non-static hit invalidates a frozen no-interference arc. */
+	FVectorDynamicInterferenceDelegate OnDynamicInterference;
+
 	/** 落地状态退出冲量驱动的剩余速度阈值，cm/s；Falling 期间保持物理状态。 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Movement|Impulse", meta = (ClampMin = "0.0", Units = "cm/s"))
 	double ImpulseDrivenMinSpeedCmPerSecond = 100.0;
@@ -95,6 +117,10 @@ protected:
 		const FHitResult& Hit,
 		float TimeSlice,
 		const FVector& MoveDelta) override;
+	virtual void ProcessLanded(
+		const FHitResult& Hit,
+		float RemainingTime,
+		int32 Iterations) override;
 	virtual void OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode) override;
 	virtual bool HandlePendingLaunch() override;
 
@@ -108,6 +134,8 @@ protected:
 	virtual void RequestDirectMove(const FVector& MoveVelocity, bool bForceMaxSpeed) override;
 
 private:
+	void BroadcastWorldStaticImpact(const FHitResult& Hit, const TCHAR* Source);
+
 	/** 等待正常速度计算结算的一次性世界空间目标速度。 */
 	FVector PendingWorldVelocityOverride = FVector::ZeroVector;
 	bool bHasPendingWorldVelocityOverride = false;

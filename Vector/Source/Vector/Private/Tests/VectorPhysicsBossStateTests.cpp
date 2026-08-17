@@ -3,6 +3,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Boss/VectorPhysicsBossState.h"
+#include "Boss/VectorKineticOrb.h"
 #include "Misc/AutomationTest.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -17,40 +18,60 @@ bool FVectorPhysicsBossInitialStateTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Anchored mass is physical, not infinite"), State.GetEffectivePhysicalMass(), 8.0);
 	TestEqual(TEXT("Anchored add budget"), State.GetMaximumConcurrentAdds(), 2);
 	TestTrue(TEXT("First add is allowed"), State.CanSpawnAdd(0));
+	const FVector Turned = FVectorWeakGuidanceMath::TurnDirection(
+		FVector::ForwardVector, FVector::RightVector, 80.0, 0.5);
+	const double TurnDegrees = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(
+		FVector::DotProduct(FVector::ForwardVector, Turned), -1.0, 1.0)));
+	TestTrue(TEXT("Weak guidance obeys its finite turn budget"),
+		FMath::IsNearlyEqual(TurnDegrees, 40.0, 0.25));
+	const FVector CompletedTurn = FVectorWeakGuidanceMath::TurnDirection(
+		FVector::ForwardVector, FVector::RightVector, 80.0, 2.0);
+	TestTrue(TEXT("Weak guidance reaches target without overshoot"),
+		CompletedTurn.Equals(FVector::RightVector, 0.01));
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FVectorPhysicsBossStaggerExposeTest,
-	"Vector.Boss.State.StaggerExposesOnce",
+	FVectorPhysicsBossStructureExposeTest,
+	"Vector.Boss.State.StructureDrivesPhases",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FVectorPhysicsBossStaggerExposeTest::RunTest(const FString& Parameters)
+bool FVectorPhysicsBossStructureExposeTest::RunTest(const FString& Parameters)
 {
 	FVectorPhysicsBossState State;
-	TestTrue(TEXT("First stagger changes phase"), State.NotifyStaggered());
-	TestEqual(TEXT("Stagger exposes the shell"), State.GetPhase(), EVectorPhysicsBossPhase::ExposedShell);
+	TestFalse(TEXT("Stagger alone cannot bypass shell structure"), State.NotifyStaggered());
+	TestEqual(TEXT("Stagger leaves shell anchored"), State.GetPhase(), EVectorPhysicsBossPhase::AnchoredShell);
+	TestTrue(TEXT("First stagger opens a finite resolve window"), State.TryBeginStaggerResolve(4.5));
+	TestFalse(TEXT("Repeated stagger is rejected during resolve"), State.TryBeginStaggerResolve(4.5));
+	State.AdvanceStaggerResolve(4.49);
+	TestTrue(TEXT("Resolve remains active before its exact expiry"), State.IsStaggerResolveActive());
+	State.AdvanceStaggerResolve(0.02);
+	TestFalse(TEXT("Resolve expires deterministically"), State.IsStaggerResolveActive());
+	TestTrue(TEXT("Stagger becomes available after resolve"), State.TryBeginStaggerResolve(4.5));
+	TestTrue(TEXT("First discrete shell event changes phase"), State.NotifyStructureBroken(1));
+	TestEqual(TEXT("One shell group exposes one side"), State.GetPhase(), EVectorPhysicsBossPhase::ExposedShell);
 	TestEqual(TEXT("Exposed mass falls through the same physical rule"), State.GetEffectivePhysicalMass(), 4.0);
-	TestFalse(TEXT("Repeated stagger does not duplicate transition"), State.NotifyStaggered());
-	TestEqual(TEXT("Only one transition was recorded"), State.GetTransitionCount(), 1);
+	TestFalse(TEXT("Repeated first-group report is idempotent"), State.NotifyStructureBroken(1));
+	TestTrue(TEXT("Second group completes the physical contract"), State.NotifyStructureBroken(2));
+	TestEqual(TEXT("Both shell groups enter overload/core window"), State.GetPhase(), EVectorPhysicsBossPhase::Overload);
+	TestEqual(TEXT("Only two structure transitions were recorded"), State.GetTransitionCount(), 2);
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FVectorPhysicsBossHealthPhasesTest,
-	"Vector.Boss.State.HealthTransitionsAreMonotonic",
+	"Vector.Boss.State.HealthOnlyOwnsDeath",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FVectorPhysicsBossHealthPhasesTest::RunTest(const FString& Parameters)
 {
 	FVectorPhysicsBossState State;
-	TestTrue(TEXT("65 percent exposes shell"), State.ApplyHealthRatio(0.65));
-	TestTrue(TEXT("30 percent enters overload"), State.ApplyHealthRatio(0.30));
-	TestFalse(TEXT("Healing cannot regress phase"), State.ApplyHealthRatio(0.90));
-	TestEqual(TEXT("Phase remains overload"), State.GetPhase(), EVectorPhysicsBossPhase::Overload);
+	TestFalse(TEXT("65 percent cannot expose shell"), State.ApplyHealthRatio(0.65));
+	TestFalse(TEXT("30 percent cannot enter overload"), State.ApplyHealthRatio(0.30));
+	TestEqual(TEXT("Boss remains anchored without structure events"), State.GetPhase(), EVectorPhysicsBossPhase::AnchoredShell);
 	TestTrue(TEXT("Zero health defeats"), State.ApplyHealthRatio(0.0));
 	TestFalse(TEXT("Defeat is terminal"), State.NotifyStaggered());
-	TestEqual(TEXT("All forward transitions counted"), State.GetTransitionCount(), 3);
+	TestEqual(TEXT("Only death transition counted"), State.GetTransitionCount(), 1);
 	return true;
 }
 
@@ -64,9 +85,11 @@ bool FVectorPhysicsBossPhaseOutputTest::RunTest(const FString& Parameters)
 	FVectorPhysicsBossState State;
 	const double AnchoredRam = State.GetRamIntervalSeconds();
 	const double AnchoredRecovery = State.GetRecoverySeconds();
-	State.ApplyHealthRatio(0.60);
+	TestEqual(TEXT("Anchored phase opens with reusable physical ammo"),
+		State.SelectAttack(0, true), EVectorPhysicsBossAttack::AmmoLaunch);
+	State.NotifyStructureBroken(1);
 	TestEqual(TEXT("Exposed add cap shrinks"), State.GetMaximumConcurrentAdds(), 1);
-	State.ApplyHealthRatio(0.20);
+	State.NotifyStructureBroken(2);
 	TestEqual(TEXT("Overload spawns no adds"), State.GetMaximumConcurrentAdds(), 0);
 	TestTrue(TEXT("Overload attacks more often"), State.GetRamIntervalSeconds() < AnchoredRam);
 	TestTrue(TEXT("Overload recovery is more punishable"), State.GetRecoverySeconds() > AnchoredRecovery);

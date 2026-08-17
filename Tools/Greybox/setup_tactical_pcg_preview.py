@@ -124,6 +124,20 @@ def spawn_ramp_x(start_x, center_y, direction, run, rise,
         label,
         (pitch, 0.0, 0.0),
     )
+    # Wide seam pads overlap both authored solids. They remove the tiny collision
+    # lips that can split Recast polygons even when the visible ramp looks flush.
+    seam_depth = max(70.0, thickness * 1.5)
+    spawn_cube(
+        (start_x, center_y, base_z - seam_depth * 0.5),
+        (1.4, width / 100.0, seam_depth / 100.0),
+        label + "_LowerSeamPad",
+    )
+    spawn_cube(
+        (start_x + direction * run, center_y,
+         base_z + rise - seam_depth * 0.5),
+        (1.4, width / 100.0, seam_depth / 100.0),
+        label + "_UpperSeamPad",
+    )
     log("ramp=%s rise=%.0f run=%.0f slope=%.1fdeg" %
         (label, rise, run, abs(pitch)))
 
@@ -143,18 +157,33 @@ def build_safe_start(center_x, target_point_class, player_start_class):
 def build_open_bowl(center_x, target_point_class):
     spawn_floor(center_x, suffix="OpenBowl_Floor")
     spawn_boundary(center_x)
+    # Authoring circuit (not player-facing labels):
+    # charger source -> angled wall / tether pillar converter -> heavy anchor receiver.
+    # The room remains open enough for a direct bait route and a recovery pocket.
+    spawn_cube((center_x - 100.0, -780.0, 125.0),
+               (8.0, 0.55, 3.5), "OpenBowl_Converter_AngledWallSouth",
+               (0.0, 24.0, 0.0))
+    spawn_cube((center_x - 100.0, 780.0, 125.0),
+               (8.0, 0.55, 3.5), "OpenBowl_Converter_AngledWallNorth",
+               (0.0, -24.0, 0.0))
+    spawn_cube((center_x - 120.0, -430.0, 175.0),
+               (1.25, 1.25, 4.5), "OpenBowl_Converter_TetherPillarSouth")
+    spawn_cube((center_x - 120.0, 430.0, 175.0),
+               (1.25, 1.25, 4.5), "OpenBowl_Converter_TetherPillarNorth")
     spawn_split_receiver_wall(
         center_x + 1050.0, 1100.0, 700.0, "OpenBowl_ImpactReceiver")
-    # Intentionally flat: its value is an unobstructed long launch/tether arc.
-    # Adding an unrelated deck would dilute the contrast with HeightShelf.
+    # Intentionally flat: its tactical verb is horizontal redirection.
     markers = []
-    offsets = ((-750, -550, 80), (-750, 550, 80), (-500, 0, 80), (-250, -500, 80),
-               (250, -300, 80), (250, 300, 80), (600, -300, 80), (600, 300, 80))
+    # Runtime index contract: 0=heavy receiver, 1=charger source, remaining=light ammo.
+    offsets = ((380, 0, 80), (-720, -520, 80), (-420, 560, 80),
+               (180, -520, 80), (650, 480, 80))
     for index, offset in enumerate(offsets):
         markers.append(spawn_marker(
             target_point_class, (center_x + offset[0], offset[1], offset[2]),
             "OpenBowl_Enemy_%02d" % index))
     ENCOUNTER_WAVES.append(markers)
+    log("OpenBowl circuit: source=charger converter=2 angled walls+2 tether pillars "
+        "receiver=two anchor groups recovery=entry-west routes=direct/wall/tether")
 
 
 def build_hard_lane(center_x, target_point_class):
@@ -327,8 +356,8 @@ def main(seed=SEED):
 
     route_length = (len(sequence) - 1) * MODULE_SPACING + 1800.0
     spawn_cube(
-        ((len(sequence) - 1) * MODULE_SPACING * 0.5, 0.0, -60.0),
-        (route_length / 100.0, 6.0, 0.4),
+        ((len(sequence) - 1) * MODULE_SPACING * 0.5, 0.0, -50.0),
+        (route_length / 100.0, 7.0, 1.0),
         "RouteSpine",
     )
 
@@ -371,7 +400,8 @@ def main(seed=SEED):
 
     build_navmesh(classes["navmesh"], len(sequence))
     if (len(ENCOUNTER_WAVES) != 2
-            or any(len(wave) != 8 for wave in ENCOUNTER_WAVES)
+            or any(len(wave) < 3 or len(wave) > 8
+                   for wave in ENCOUNTER_WAVES)
             or BOSS_SPAWN_POINT is None
             or BOSS_OVERLOAD_FRICTION_ZONE is None or len(WAVE_GATES) != 2
             or len(ROOM_TRIGGERS) != 3):
@@ -395,7 +425,8 @@ def main(seed=SEED):
     director.set_editor_property("wave_two_exit_gate", WAVE_GATES[1])
     director.set_editor_property("room_activation_triggers", ROOM_TRIGGERS)
     log("layout: " + library.describe_layout(seed))
-    log("SUCCESS: deterministic PCG route built with sequential 8+8+Boss waves; Build Paths before Play")
+    log("SUCCESS: deterministic PCG route built with sequential %d+%d+Boss waves; Build Paths before Play"
+        % (len(ENCOUNTER_WAVES[0]), len(ENCOUNTER_WAVES[1])))
 
 
 if __name__ == "__main__":

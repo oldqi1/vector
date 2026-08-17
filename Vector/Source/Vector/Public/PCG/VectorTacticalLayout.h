@@ -38,8 +38,21 @@ struct VECTOR_API FVectorTacticalModuleDefinition
 	int32 HeightLayerCount = 1;
 	double MaximumHeightDifferenceCm = 0.0;
 
+	/** Gameplay circuit contract. Geometry alone is not a valid encounter module. */
+	TArray<FName> Sources;
+	TArray<FName> Converters;
+	TArray<FName> Receivers;
+	TArray<FName> RecoveryPockets;
+	TArray<FName> SupportedToolVerbs;
+	TArray<FName> EnemyFunctionalSlots;
+	TArray<FString> Recipes;
+	FName RewardBias = NAME_None;
+
 	int32 CountOpportunities() const;
 	bool HasOpportunity(EVectorPhysicsOpportunity Opportunity) const;
+	bool HasCompleteCircuit() const;
+	bool HasDistinctOpenings() const;
+	FString DescribeCircuit() const;
 };
 
 struct VECTOR_API FVectorTacticalGenerationRules

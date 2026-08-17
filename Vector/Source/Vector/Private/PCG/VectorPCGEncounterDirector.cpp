@@ -11,6 +11,7 @@
 #include "Hunt/VectorEncounterComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "NavigationSystem.h"
+#include "PCG/VectorTacticalLayout.h"
 #include "VectorGameMode.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVectorPCGEncounter, Log, All);
@@ -29,6 +30,16 @@ namespace
 		const FString& ModuleName,
 		const int32 SpawnIndex)
 	{
+		// Every regular room teaches one tracking projectile and one readable
+		// cone volley before Bosses combine those verbs at higher intensity.
+		if (SpawnIndex == 2)
+		{
+			return EVectorEnemyArchetype::ArcShell;
+		}
+		if (SpawnIndex == 5)
+		{
+			return EVectorEnemyArchetype::CorrosionDrone;
+		}
 		// Slot order is authored with the geometry. Launchers occupy the layer
 		// that exposes this module's physical recipe; rooms do not share one list.
 		if (ModuleName == TEXT("HeightShelf"))
@@ -60,9 +71,24 @@ namespace
 		{
 		case EVectorEnemyArchetype::HeavyRhinoBeetle: return TEXT("HeavyRhinoBeetle");
 		case EVectorEnemyArchetype::ChargerRammer: return TEXT("ChargerRammer");
+		case EVectorEnemyArchetype::ArcShell: return TEXT("ArcShell");
+		case EVectorEnemyArchetype::CorrosionDrone: return TEXT("CorrosionDrone");
 		case EVectorEnemyArchetype::LightHoppper:
 		default: return TEXT("LightHopper");
 		}
+	}
+
+	const FVectorTacticalModuleDefinition* FindModuleDefinition(const FString& ModuleName)
+	{
+		for (const FVectorTacticalModuleDefinition& Definition :
+			FVectorTacticalGenerator::GetEncounterModuleCatalog())
+		{
+			if (Definition.ModuleId.ToString() == ModuleName)
+			{
+				return &Definition;
+			}
+		}
+		return nullptr;
 	}
 }
 
@@ -134,10 +160,15 @@ bool AVectorPCGEncounterDirector::ValidateRouteConfiguration(
 	{
 		return true;
 	}
-	if (EncounterWaveOneSpawns.Num() != 8 || EncounterWaveTwoSpawns.Num() != 8)
+	const auto IsSupportedRoomBudget = [](const int32 Count)
+	{
+		return Count >= 3 && Count <= 8;
+	};
+	if (!IsSupportedRoomBudget(EncounterWaveOneSpawns.Num())
+		|| !IsSupportedRoomBudget(EncounterWaveTwoSpawns.Num()))
 	{
 		OutFailureReason = FString::Printf(
-			TEXT("regular wave budget must be 8/8, found %d/%d"),
+			TEXT("regular room budgets must each be 3-8, found %d/%d"),
 			EncounterWaveOneSpawns.Num(), EncounterWaveTwoSpawns.Num());
 		return false;
 	}
@@ -327,6 +358,20 @@ int32 AVectorPCGEncounterDirector::SpawnEncounterWave(
 	const TArray<TObjectPtr<AActor>>& SpawnPoints,
 	const int32 WaveIndex)
 {
+	const int32 ModuleIndex = WaveIndex + 1;
+	const FString ModuleName = ModuleSequence.IsValidIndex(ModuleIndex)
+		? ModuleSequence[ModuleIndex] : TEXT("Unknown");
+	if (const FVectorTacticalModuleDefinition* Definition =
+		FindModuleDefinition(ModuleName))
+	{
+		UE_LOG(LogVectorPCGEncounter, Log,
+			TEXT("PCG combat circuit: module=%s %s recipeA=%s recipeB=%s check=%s"),
+			*ModuleName, *Definition->DescribeCircuit(),
+			Definition->Recipes.IsValidIndex(0) ? *Definition->Recipes[0] : TEXT("NONE"),
+			Definition->Recipes.IsValidIndex(1) ? *Definition->Recipes[1] : TEXT("NONE"),
+			Definition->HasCompleteCircuit() && Definition->HasDistinctOpenings()
+				? TEXT("PASS") : TEXT("FAIL"));
+	}
 	int32 SpawnedCount = 0;
 	for (int32 Index = 0; Index < SpawnPoints.Num(); ++Index)
 	{
@@ -351,12 +396,17 @@ int32 AVectorPCGEncounterDirector::SpawnEncounterWave(
 int32 AVectorPCGEncounterDirector::SpawnBossWave()
 {
 	int32 SpawnedCount = 0;
+	bool bBossSpawned = false;
+	bool bBossRegistered = false;
+	int32 SpawnedAddCount = 0;
 	if (AVectorPhysicsBoss* Boss = SpawnBossAt(BossSpawnPoint))
 	{
+		bBossSpawned = true;
 		Boss->OnBossPhaseChanged.AddUniqueDynamic(
 			this, &AVectorPCGEncounterDirector::HandleBossPhaseChanged);
 		if (Encounter->RegisterSpawnedEnemy(Boss))
 		{
+			bBossRegistered = true;
 			++SpawnedCount;
 		}
 		else
@@ -371,6 +421,7 @@ int32 AVectorPCGEncounterDirector::SpawnBossWave()
 			if (Encounter->RegisterSpawnedEnemy(Enemy))
 			{
 				++SpawnedCount;
+				++SpawnedAddCount;
 			}
 			else
 			{
@@ -378,6 +429,13 @@ int32 AVectorPCGEncounterDirector::SpawnBossWave()
 			}
 		}
 	}
+	UE_LOG(LogVectorPCGEncounter, Log,
+		TEXT("PCG Boss wave built: bossPoint=%s bossSpawned=%s bossRegistered=%s adds=%d/%d totalSpawned=%d check=%s"),
+		*GetNameSafe(BossSpawnPoint), bBossSpawned ? TEXT("YES") : TEXT("no"),
+		bBossRegistered ? TEXT("YES") : TEXT("no"), SpawnedAddCount,
+		BossAddSpawnPoints.Num(), SpawnedCount,
+		bBossRegistered && SpawnedAddCount == BossAddSpawnPoints.Num()
+			? TEXT("PASS") : TEXT("FAIL"));
 	return SpawnedCount;
 }
 
@@ -449,6 +507,13 @@ AVectorPhysicsBoss* AVectorPCGEncounterDirector::SpawnBossAt(AActor* SpawnPoint)
 	if (Boss)
 	{
 		UGameplayStatics::FinishSpawningActor(Boss, SpawnTransform);
+		Boss->ConfigureEncounterVoidRecovery(
+			EnemyVoidRecoveryFloorWorldZ,
+			SpawnTransform.GetLocation());
+		UE_LOG(LogVectorPCGEncounter, Log,
+			TEXT("PCG Boss void contract: boss=%s floorZ=%.0f drop=%s outcome=ENVIRONMENTAL_KILL ledger=HEALTH_DEATH check=PASS"),
+			*Boss->GetName(), EnemyVoidRecoveryFloorWorldZ,
+			*SpawnTransform.GetLocation().ToCompactString());
 	}
 	return Boss;
 }

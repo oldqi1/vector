@@ -13,7 +13,10 @@ AVectorPCGRoomTrigger::AVectorPCGRoomTrigger()
 	PrimaryActorTick.bCanEverTick = false;
 	TriggerBounds = CreateDefaultSubobject<UBoxComponent>(TEXT("TriggerBounds"));
 	SetRootComponent(TriggerBounds);
-	TriggerBounds->SetBoxExtent(FVector(180.0, 280.0, 180.0));
+	// Cover the complete tactical-room cross section, including elevated entry
+	// routes. A narrow center trigger can be bypassed on the 2200-3000 cm floors,
+	// leaving the player inside an empty room without ever activating its wave.
+	TriggerBounds->SetBoxExtent(FVector(220.0, 1550.0, 900.0));
 	TriggerBounds->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	TriggerBounds->SetCollisionResponseToAllChannels(ECR_Ignore);
 	TriggerBounds->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
@@ -50,7 +53,8 @@ void AVectorPCGRoomTrigger::HandleBeginOverlap(
 		}
 	}
 	UE_LOG(LogVectorPCGRoomTrigger, Log,
-		TEXT("PCG room entered: trigger=%s room=%d player=%s"),
-		*GetName(), RoomIndex, *Pawn->GetName());
+		TEXT("PCG room entered: trigger=%s room=%d player=%s triggerAt=%s playerAt=%s"),
+		*GetName(), RoomIndex, *Pawn->GetName(),
+		*GetActorLocation().ToCompactString(), *Pawn->GetActorLocation().ToCompactString());
 	OnRoomEntered.Broadcast(RoomIndex);
 }

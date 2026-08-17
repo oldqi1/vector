@@ -12,12 +12,15 @@ class UInputAction;
 class UInputMappingContext;
 class UAnimSequence;
 class UVectorImpulseHammerComponent;
+class UVectorGunComponent;
+class UVectorTrajectoryPreviewComponent;
 class UVectorGravityHookComponent;
 class UVectorActionLockComponent;
 class UVectorHealthComponent;
 class UVectorPhysicsModifierComponent;
 class UVectorModifierApplicatorComponent;
 class UVectorLiftForkComponent;
+class UVectorRunProgressionComponent;
 class UDamageType;
 
 /** EnhancedInput 值类型；注意是 struct（USTRUCT），须按引用前向声明。 */
@@ -27,6 +30,7 @@ struct FInputActionValue;
 UENUM(BlueprintType)
 enum class EVectorEquipmentSlot : uint8
 {
+	/** Serialized legacy slot name retained so existing maps/Blueprints keep loading. */
 	Hammer,
 	CableGun,
 	Lubricant,
@@ -120,6 +124,14 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Combat")
 	TObjectPtr<UVectorImpulseHammerComponent> ImpulseHammer;
 
+	/** Default primary weapon: instant mouse-directed velocity injection. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Combat")
+	TObjectPtr<UVectorGunComponent> VectorGun;
+
+	/** Shared first-result previewer for vector, lift and future slam actions. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Combat")
+	TObjectPtr<UVectorTrajectoryPreviewComponent> TrajectoryPreview;
+
 	/** 双端绳线枪：按住墙面牵引玩家；对怪物手动双发后收绳对撞。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Combat")
 	TObjectPtr<UVectorGravityHookComponent> GravityHook;
@@ -132,9 +144,13 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Combat")
 	TObjectPtr<UVectorModifierApplicatorComponent> ModifierApplicator;
 
-	/** 装备栏 5：对准近处目标施加垂直冲量。 */
+	/** 装备栏 5：把近处目标已有水平速度换向为垂直弧线。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Combat")
 	TObjectPtr<UVectorLiftForkComponent> LiftFork;
+
+	/** Guaranteed room-clear vertical growth for range/impulse/capacity/recharge. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Progression")
+	TObjectPtr<UVectorRunProgressionComponent> RunProgression;
 
 	/** 玩家核心生命（100 血；被敌人撞击/扑击扣血，归零死亡重生）。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Combat")
@@ -170,6 +186,9 @@ private:
 	void HandleLubricantPressed();
 	void HandleBuoyantSporePressed();
 	void HandleLiftForkPressed();
+	void HandleCalibrationChoiceOnePressed();
+	void HandleCalibrationChoiceTwoPressed();
+	void HandleCalibrationChoiceThreePressed();
 	void SelectEquipment(EVectorEquipmentSlot NewEquipmentSlot);
 
 	/** 空格按下：起跳。 */
@@ -225,6 +244,15 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> LiftForkInputAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> CalibrationChoiceOneInputAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> CalibrationChoiceTwoInputAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> CalibrationChoiceThreeInputAction;
 
 	/** 跳跃动作（空格）。 */
 	UPROPERTY(Transient)

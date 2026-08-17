@@ -147,6 +147,10 @@ namespace
 			const double LateralDistanceSquared = FMath::Max(
 				0.0,
 				static_cast<double>(ToCandidate.SizeSquared()) - FMath::Square(ForwardDistance));
+			if (LateralDistanceSquared > FMath::Square(RadiusCm))
+			{
+				continue;
+			}
 			if (LateralDistanceSquared < BestLateralDistanceSquared
 				|| (FMath::IsNearlyEqual(LateralDistanceSquared, BestLateralDistanceSquared, 1.0)
 					&& ForwardDistance < BestForwardDistance))
@@ -222,6 +226,50 @@ FVector FVectorCombatTargeting::ComputeCursorGroundAimDirection(
 	return ComputeHorizontalAimDirection(Owner);
 }
 
+bool FVectorCombatTargeting::ComputeCursorWorldStaticPoint(
+	const AActor* Owner,
+	FVector& OutImpactPoint,
+	FVector& OutImpactNormal)
+{
+	OutImpactPoint = FVector::ZeroVector;
+	OutImpactNormal = FVector::UpVector;
+	UWorld* World = Owner ? Owner->GetWorld() : nullptr;
+	const APawn* Pawn = Cast<APawn>(Owner);
+	const APlayerController* PlayerController = Pawn
+		? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+	if (!Owner || !World || !PlayerController)
+	{
+		return false;
+	}
+
+	FVector CursorRayOrigin = FVector::ZeroVector;
+	FVector CursorRayDirection = FVector::ZeroVector;
+	if (!PlayerController->DeprojectMousePositionToWorld(
+		CursorRayOrigin, CursorRayDirection)
+		|| CursorRayDirection.IsNearlyZero())
+	{
+		return false;
+	}
+
+	FHitResult Hit;
+	FCollisionQueryParams Params(
+		SCENE_QUERY_STAT(VectorCursorWorldStaticPoint), false, Owner);
+	const bool bHit = World->LineTraceSingleByObjectType(
+		Hit,
+		CursorRayOrigin,
+		CursorRayOrigin + CursorRayDirection.GetSafeNormal() * 100000.0,
+		FCollisionObjectQueryParams(ECC_TO_BITFIELD(ECC_WorldStatic)),
+		Params);
+	if (!bHit || !Hit.bBlockingHit || Hit.ImpactPoint.ContainsNaN()
+		|| Hit.ImpactNormal.ContainsNaN())
+	{
+		return false;
+	}
+	OutImpactPoint = Hit.ImpactPoint;
+	OutImpactNormal = Hit.ImpactNormal.GetSafeNormal();
+	return !OutImpactNormal.IsNearlyZero();
+}
+
 bool FVectorCombatTargeting::HasUnobstructedLine(const AActor* Owner, const AActor* Target)
 {
 	UWorld* World = Owner ? Owner->GetWorld() : nullptr;
@@ -269,6 +317,132 @@ AActor* FVectorCombatTargeting::FindMostAlignedMovableStableTarget(
 			&& Candidate->FindComponentByClass<UVectorCharacterMovementComponent>()
 			&& Candidate->FindComponentByClass<UVectorStabilityComponent>();
 	});
+}
+
+bool FVectorCombatTargeting::IsCursorCandidatePreferred(
+	const FVectorCursorTargetScore& Candidate,
+	const FVectorCursorTargetScore& CurrentBest,
+	const double AirborneOverlapTolerancePixels)
+{
+	const double CandidateScreenDistance = FMath::Sqrt(FMath::Max(
+		0.0, Candidate.ScreenDistanceSquared));
+	const double BestScreenDistance = FMath::Sqrt(FMath::Max(
+		0.0, CurrentBest.ScreenDistanceSquared));
+	const double OverlapTolerance = FMath::Max(0.0, AirborneOverlapTolerancePixels);
+	if (CandidateScreenDistance + OverlapTolerance < BestScreenDistance)
+	{
+		return true;
+	}
+	if (BestScreenDistance + OverlapTolerance < CandidateScreenDistance)
+	{
+		return false;
+	}
+	if (Candidate.bAirborne != CurrentBest.bAirborne)
+	{
+		return Candidate.bAirborne;
+	}
+	if (!FMath::IsNearlyEqual(
+		Candidate.ScreenDistanceSquared, CurrentBest.ScreenDistanceSquared, 1.0))
+	{
+		return Candidate.ScreenDistanceSquared < CurrentBest.ScreenDistanceSquared;
+	}
+	if (!FMath::IsNearlyEqual(
+		Candidate.SpatialDistanceSquared, CurrentBest.SpatialDistanceSquared, 1.0))
+	{
+		return Candidate.SpatialDistanceSquared < CurrentBest.SpatialDistanceSquared;
+	}
+	return CurrentBest.StableName.IsEmpty()
+		|| Candidate.StableName.Compare(CurrentBest.StableName) < 0;
+}
+
+AActor* FVectorCombatTargeting::FindBestCursorMovableStableTarget(
+	const AActor* Owner,
+	const FVector& FallbackDirection,
+	const double RangeCm,
+	const double FallbackRadiusCm,
+	const double ScreenRadiusPixels,
+	const AActor* ExcludedActor)
+{
+	UWorld* World = Owner ? Owner->GetWorld() : nullptr;
+	const APawn* Pawn = Cast<APawn>(Owner);
+	const APlayerController* PlayerController = Pawn
+		? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+	float CursorX = 0.0f;
+	float CursorY = 0.0f;
+	if (!Owner || !World || !PlayerController
+		|| !PlayerController->GetMousePosition(CursorX, CursorY)
+		|| !FMath::IsFinite(RangeCm) || RangeCm <= 0.0
+		|| !FMath::IsFinite(ScreenRadiusPixels) || ScreenRadiusPixels < 0.0)
+	{
+		return FindMostAlignedMovableStableTarget(
+			Owner, FallbackDirection, RangeCm, FallbackRadiusCm, ExcludedActor);
+	}
+
+	TArray<FOverlapResult> Hits;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(VectorCombatCursorTargeting), false, Owner);
+	World->OverlapMultiByObjectType(
+		Hits,
+		Owner->GetActorLocation(),
+		FQuat::Identity,
+		FCollisionObjectQueryParams(ECC_TO_BITFIELD(ECC_Pawn)),
+		FCollisionShape::MakeSphere(RangeCm),
+		Params);
+
+	AActor* BestTarget = nullptr;
+	FVectorCursorTargetScore BestScore;
+	for (const FOverlapResult& Hit : Hits)
+	{
+		AActor* Candidate = Hit.GetActor();
+		if (!Candidate || Candidate == Owner || Candidate == ExcludedActor
+			|| !Candidate->FindComponentByClass<UVectorCharacterMovementComponent>()
+			|| !Candidate->FindComponentByClass<UVectorStabilityComponent>())
+		{
+			continue;
+		}
+		if (const UVectorHealthComponent* Health =
+			Candidate->FindComponentByClass<UVectorHealthComponent>(); Health && Health->IsDead())
+		{
+			continue;
+		}
+		const FVector SpatialDelta = Candidate->GetActorLocation() - Owner->GetActorLocation();
+		if (SpatialDelta.SizeSquared() > FMath::Square(RangeCm)
+			|| !HasUnobstructedLine(Owner, Candidate))
+		{
+			continue;
+		}
+
+		const FVector BoundsOrigin = Candidate->GetComponentsBoundingBox().GetCenter();
+		FVector2D CandidateScreenPosition = FVector2D::ZeroVector;
+		if (!PlayerController->ProjectWorldLocationToScreen(
+			BoundsOrigin, CandidateScreenPosition, false))
+		{
+			continue;
+		}
+		const double ScreenDistanceSquared = FVector2D::DistSquared(
+			CandidateScreenPosition, FVector2D(CursorX, CursorY));
+		if (ScreenDistanceSquared > FMath::Square(ScreenRadiusPixels))
+		{
+			continue;
+		}
+
+		const UVectorCharacterMovementComponent* Movement =
+			Candidate->FindComponentByClass<UVectorCharacterMovementComponent>();
+		const FVector EffectiveVelocity = Movement
+			? Movement->GetEffectiveVelocityForPendingStep() : Candidate->GetVelocity();
+		FVectorCursorTargetScore CandidateScore;
+		CandidateScore.ScreenDistanceSquared = ScreenDistanceSquared;
+		CandidateScore.bAirborne = Movement
+			&& (Movement->IsFalling()
+				|| FMath::Abs(EffectiveVelocity.Z) > UE_KINDA_SMALL_NUMBER);
+		CandidateScore.SpatialDistanceSquared = SpatialDelta.SizeSquared();
+		CandidateScore.StableName = Candidate->GetName();
+		if (!BestTarget || IsCursorCandidatePreferred(CandidateScore, BestScore))
+		{
+			BestTarget = Candidate;
+			BestScore = MoveTemp(CandidateScore);
+		}
+	}
+	return BestTarget;
 }
 
 AActor* FVectorCombatTargeting::FindNearestModifierTarget(

@@ -28,6 +28,8 @@ void FVectorPhysicsBossState::Reset()
 	Phase = EVectorPhysicsBossPhase::AnchoredShell;
 	TransitionCount = 0;
 	bHasEverStaggered = false;
+	BrokenStructureGroupCount = 0;
+	StaggerResolveSecondsRemaining = 0.0;
 }
 
 bool FVectorPhysicsBossState::ApplyHealthRatio(const double HealthRatio)
@@ -37,17 +39,25 @@ bool FVectorPhysicsBossState::ApplyHealthRatio(const double HealthRatio)
 		return false;
 	}
 
-	const double ClampedRatio = FMath::Clamp(HealthRatio, 0.0, 1.0);
-	if (ClampedRatio <= 0.0)
+	if (FMath::Clamp(HealthRatio, 0.0, 1.0) <= 0.0)
 	{
 		return TransitionTo(EVectorPhysicsBossPhase::Defeated);
 	}
-	if (ClampedRatio <= FMath::Clamp(Rules.OverloadHealthRatio, 0.0, 1.0))
+	return false;
+}
+
+bool FVectorPhysicsBossState::NotifyStructureBroken(const int32 BrokenGroupCount)
+{
+	if (IsDefeated())
+	{
+		return false;
+	}
+	BrokenStructureGroupCount = FMath::Max(BrokenStructureGroupCount, BrokenGroupCount);
+	if (BrokenStructureGroupCount >= 2)
 	{
 		return TransitionTo(EVectorPhysicsBossPhase::Overload);
 	}
-	if (bHasEverStaggered
-		|| ClampedRatio <= FMath::Clamp(Rules.ExposedHealthRatio, 0.0, 1.0))
+	if (BrokenStructureGroupCount >= 1)
 	{
 		return TransitionTo(EVectorPhysicsBossPhase::ExposedShell);
 	}
@@ -57,7 +67,30 @@ bool FVectorPhysicsBossState::ApplyHealthRatio(const double HealthRatio)
 bool FVectorPhysicsBossState::NotifyStaggered()
 {
 	bHasEverStaggered = true;
-	return TransitionTo(EVectorPhysicsBossPhase::ExposedShell);
+	return false;
+}
+
+bool FVectorPhysicsBossState::TryBeginStaggerResolve(const double ResolveDurationSeconds)
+{
+	bHasEverStaggered = true;
+	if (IsDefeated() || IsStaggerResolveActive()
+		|| !FMath::IsFinite(ResolveDurationSeconds) || ResolveDurationSeconds <= 0.0)
+	{
+		return false;
+	}
+	StaggerResolveSecondsRemaining = ResolveDurationSeconds;
+	return true;
+}
+
+void FVectorPhysicsBossState::AdvanceStaggerResolve(const double DeltaSeconds)
+{
+	if (!FMath::IsFinite(DeltaSeconds) || DeltaSeconds <= 0.0
+		|| StaggerResolveSecondsRemaining <= 0.0)
+	{
+		return;
+	}
+	StaggerResolveSecondsRemaining = FMath::Max(
+		0.0, StaggerResolveSecondsRemaining - DeltaSeconds);
 }
 
 double FVectorPhysicsBossState::GetEffectivePhysicalMass() const
@@ -137,16 +170,27 @@ EVectorPhysicsBossAttack FVectorPhysicsBossState::SelectAttack(
 	switch (Phase)
 	{
 	case EVectorPhysicsBossPhase::AnchoredShell:
-		return EVectorPhysicsBossAttack::Ram;
+	{
+		constexpr EVectorPhysicsBossAttack Pattern[] =
+		{
+			EVectorPhysicsBossAttack::AmmoLaunch,
+			EVectorPhysicsBossAttack::Ram,
+		};
+		const EVectorPhysicsBossAttack Selected = Pattern[SafeIndex % UE_ARRAY_COUNT(Pattern)];
+		return Selected == EVectorPhysicsBossAttack::AmmoLaunch && !bAmmoAvailable
+			? EVectorPhysicsBossAttack::Ram : Selected;
+	}
 	case EVectorPhysicsBossPhase::ExposedShell:
 	{
 		constexpr EVectorPhysicsBossAttack Pattern[] =
 		{
+			EVectorPhysicsBossAttack::AmmoLaunch,
 			EVectorPhysicsBossAttack::Ram,
 			EVectorPhysicsBossAttack::Slam,
-			EVectorPhysicsBossAttack::AerialBurst,
 		};
-		return Pattern[SafeIndex % UE_ARRAY_COUNT(Pattern)];
+		const EVectorPhysicsBossAttack Selected = Pattern[SafeIndex % UE_ARRAY_COUNT(Pattern)];
+		return Selected == EVectorPhysicsBossAttack::AmmoLaunch && !bAmmoAvailable
+			? EVectorPhysicsBossAttack::AerialBurst : Selected;
 	}
 	case EVectorPhysicsBossPhase::Overload:
 	{
@@ -171,9 +215,11 @@ EVectorPhysicsBossAttack FVectorPhysicsBossState::SelectAttack(
 FString FVectorPhysicsBossState::Describe() const
 {
 	return FString::Printf(
-		TEXT("phase=%s transitions=%d staggered=%s mass=%.1f ram=%.2fs recovery=%.2fs maxAdds=%d"),
+		TEXT("phase=%s transitions=%d structure=%d/2 staggered=%s resolve=%.1fs mass=%.1f ram=%.2fs recovery=%.2fs maxAdds=%d"),
 		*VectorPhysicsBossStateInternal::PhaseToString(Phase), TransitionCount,
+		BrokenStructureGroupCount,
 		bHasEverStaggered ? TEXT("YES") : TEXT("no"),
+		StaggerResolveSecondsRemaining,
 		GetEffectivePhysicalMass(), GetRamIntervalSeconds(), GetRecoverySeconds(),
 		GetMaximumConcurrentAdds());
 }

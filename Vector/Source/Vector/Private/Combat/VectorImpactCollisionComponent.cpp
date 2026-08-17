@@ -4,6 +4,7 @@
 
 #include "AIController.h"
 #include "Boss/VectorPhysicsBoss.h"
+#include "Combat/VectorBreakableAnchorComponent.h"
 #include "Combat/VectorEnemy.h"
 #include "Combat/VectorEnemyController.h"
 #include "Combat/VectorHealthComponent.h"
@@ -168,16 +169,60 @@ void UVectorImpactCollisionComponent::OnCharacterImpact(
 
 void UVectorImpactCollisionComponent::OnLandedWithImpact(const double FallSpeedCmPerSecond)
 {
-	if (!bEnableLandingShock || FallSpeedCmPerSecond > -MinFallSpeedCmPerSecond)
+	const FName LandingSource = PendingLandingSource;
+	const double MinimumFallSpeedOverride = PendingLandingMinimumFallSpeedOverride;
+	const double RadiusScale = PendingLandingRadiusScale;
+	const double DamageScale = PendingLandingDamageScale;
+	const double MaximumDamageOverride = PendingLandingMaximumDamageOverride;
+	PendingLandingSource = NAME_None;
+	PendingLandingMinimumFallSpeedOverride = -1.0;
+	PendingLandingRadiusScale = 1.0;
+	PendingLandingDamageScale = 1.0;
+	PendingLandingMaximumDamageOverride = -1.0;
+	bLiftForkVectorComboPrimed = false;
+	const double EffectiveMinimumFallSpeed = MinimumFallSpeedOverride >= 0.0
+		? MinimumFallSpeedOverride : MinFallSpeedCmPerSecond;
+	if (!bEnableLandingShock || FallSpeedCmPerSecond > -EffectiveMinimumFallSpeed)
 	{
+		if (!LandingSource.IsNone())
+		{
+			UE_LOG(LogVectorImpact, Log,
+				TEXT("Landing source consumed without shock: owner=%s source=%s fall=%.0f threshold=%.0f check=PASS"),
+				*GetNameSafe(GetOwner()), *LandingSource.ToString(),
+				-FallSpeedCmPerSecond, EffectiveMinimumFallSpeed);
+		}
 		return;
 	}
-	UE_LOG(LogVectorImpact, Log, TEXT("Landing shock triggered: owner=%s fall=%.0f threshold=%.0f radius=%.0f"),
+	UE_LOG(LogVectorImpact, Log, TEXT("Landing shock triggered: owner=%s source=%s fall=%.0f threshold=%.0f radius=%.0f"),
 		GetOwner() ? *GetOwner()->GetName() : TEXT("(none)"),
+		LandingSource.IsNone() ? TEXT("UNSPECIFIED") : *LandingSource.ToString(),
 		-FallSpeedCmPerSecond,
-		MinFallSpeedCmPerSecond,
-		LandedAoERadiusCm);
-	ResolveLandingShock(-FallSpeedCmPerSecond);
+		EffectiveMinimumFallSpeed,
+		LandedAoERadiusCm * FMath::Max(0.0, RadiusScale));
+	ResolveLandingShock(
+		-FallSpeedCmPerSecond, LandingSource, RadiusScale, DamageScale,
+		MaximumDamageOverride);
+}
+
+void UVectorImpactCollisionComponent::ArmNextLandingSource(
+	const FName Source,
+	const double MinimumFallSpeedOverride,
+	const double RadiusScale,
+	const double DamageScale,
+	const double MaximumDamageOverride)
+{
+	PendingLandingSource = Source;
+	PendingLandingMinimumFallSpeedOverride = MinimumFallSpeedOverride;
+	PendingLandingRadiusScale = FMath::Max(0.0, RadiusScale);
+	PendingLandingDamageScale = FMath::Max(0.0, DamageScale);
+	PendingLandingMaximumDamageOverride = MaximumDamageOverride;
+}
+
+bool UVectorImpactCollisionComponent::ConsumeLiftForkVectorCombo()
+{
+	const bool bWasPrimed = bLiftForkVectorComboPrimed;
+	bLiftForkVectorComboPrimed = false;
+	return bWasPrimed;
 }
 
 void UVectorImpactCollisionComponent::ResolveTargetCollision(
@@ -198,6 +243,16 @@ void UVectorImpactCollisionComponent::ResolveTargetCollision(
 	UVectorHealthComponent* TargetHealth = TargetActor->FindComponentByClass<UVectorHealthComponent>();
 	UVectorStabilityComponent* StrikerStability = Owner->FindComponentByClass<UVectorStabilityComponent>();
 	UVectorStabilityComponent* TargetStability = TargetActor->FindComponentByClass<UVectorStabilityComponent>();
+	if (UVectorBreakableAnchorComponent* AnchorStructure =
+		TargetActor->FindComponentByClass<UVectorBreakableAnchorComponent>())
+	{
+		// Structure consumes the same finite collision fact before mass is read,
+		// so a broken group changes this collision's physical response immediately.
+		AnchorStructure->ApplyCollisionEvent(
+			CollisionDirection,
+			ClosingSpeedCmPerSecond,
+			Owner);
+	}
 	if (TargetHealth && TargetHealth->IsDead())
 	{
 		return;
@@ -393,7 +448,12 @@ void UVectorImpactCollisionComponent::ResolveSurfaceCollision(const double Impac
 		bKilled ? TEXT("YES") : TEXT("no"));
 }
 
-void UVectorImpactCollisionComponent::ResolveLandingShock(const double FallSpeedCmPerSecond)
+void UVectorImpactCollisionComponent::ResolveLandingShock(
+	const double FallSpeedCmPerSecond,
+	const FName LandingSource,
+	const double RadiusScale,
+	const double DamageScale,
+	const double MaximumDamageOverride)
 {
 	AActor* Owner = GetOwner();
 	UWorld* World = GetWorld();
@@ -407,7 +467,8 @@ void UVectorImpactCollisionComponent::ResolveLandingShock(const double FallSpeed
 		? OwnerStability->GetMassMultiplierByClass(OwnerStability->GetMassClass())
 		: 1.0;
 
-	FCollisionShape Shape = FCollisionShape::MakeSphere(LandedAoERadiusCm);
+	const double EffectiveRadius = LandedAoERadiusCm * FMath::Max(0.0, RadiusScale);
+	FCollisionShape Shape = FCollisionShape::MakeSphere(EffectiveRadius);
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(VectorLandingShock), false, Owner);
 
 	TArray<FOverlapResult> Overlaps;
@@ -439,13 +500,16 @@ void UVectorImpactCollisionComponent::ResolveLandingShock(const double FallSpeed
 		{
 			continue;
 		}
-		const double Damage = FVectorImpactMath::ComputeCollisionDamage(
+		const double BaseDamage = FVectorImpactMath::ComputeCollisionDamage(
 			FallSpeedCmPerSecond,
 			SourceMassMultiplier,
 			WallCollisionMultiplier, // 落地震荡按地面（硬表面）强度
 			MinDamageSpeedCmPerSecond,
 			DamagePerSpeed,
 			MaxDamage);
+		const double Damage = FMath::Min(
+			BaseDamage * FMath::Max(0.0, DamageScale),
+			MaximumDamageOverride >= 0.0 ? MaximumDamageOverride : MaxDamage);
 		if (Damage > 0.0)
 		{
 			if (TargetStability)
@@ -460,10 +524,13 @@ void UVectorImpactCollisionComponent::ResolveLandingShock(const double FallSpeed
 					Attribution->RecordKill(EVectorKillCause::LandingShock);
 				}
 			}
-			UE_LOG(LogVectorImpact, Log, TEXT("Landing shock: %s -> %s fall=%.0f damage=%.1f killed=%s"),
+			UE_LOG(LogVectorImpact, Log, TEXT("Landing shock: %s -> %s source=%s fall=%.0f radius=%.0f damageScale=%.2f damage=%.1f killed=%s"),
 				*Owner->GetName(),
 				*HitActor->GetName(),
+				LandingSource.IsNone() ? TEXT("UNSPECIFIED") : *LandingSource.ToString(),
 				FallSpeedCmPerSecond,
+				EffectiveRadius,
+				DamageScale,
 				Damage,
 				bKilled ? TEXT("YES") : TEXT("no"));
 		}

@@ -6,6 +6,10 @@
 #include "Combat/VectorEnemy.h"
 #include "VectorPhysicsBoss.generated.h"
 
+class AVectorKineticOrb;
+class UPointLightComponent;
+enum class EVectorAnchorGroupSide : uint8;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	FVectorPhysicsBossPhaseChangedSignature,
 	EVectorPhysicsBossPhase, PreviousPhase,
@@ -30,11 +34,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Vector|Boss")
 	FString GetBossStateDescription() const { return BossState.Describe(); }
 
+	UFUNCTION(BlueprintPure, Category = "Vector|Boss")
+	bool IsStaggerResolveActive() const { return BossState.IsStaggerResolveActive(); }
+
 	/** True only during the launched horizontal ram, for kill attribution. */
 	bool IsExecutingRam() const;
 
 	UPROPERTY(BlueprintAssignable, Category = "Vector|Boss")
 	FVectorPhysicsBossPhaseChangedSignature OnBossPhaseChanged;
+
+	/** Persistent shell-state light, separate from attack and lift feedback. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Presentation")
+	TObjectPtr<UPointLightComponent> BossPhaseLight;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Ram", meta = (ClampMin = "0.0", Units = "cm"))
 	double RamTriggerRangeCm = 1800.0;
@@ -81,6 +92,34 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|AmmoLaunch", meta = (ClampMin = "0.0", Units = "cm/s"))
 	double AmmoLaunchMaximumBaseSpeedCmPerSecond = 2200.0;
 
+	/** Reusable physical ammunition; prevents the fight becoming empty after adds die. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|KineticOrb")
+	TSubclassOf<AVectorKineticOrb> KineticOrbClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|KineticOrb", meta = (ClampMin = "0.0", Units = "cm/s"))
+	double KineticOrbLaunchSpeedCmPerSecond = 620.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|KineticOrb", meta = (ClampMin = "1", ClampMax = "12"))
+	int32 MaximumActiveKineticOrbs = 5;
+
+	/** Arena never permanently runs out of a physical answer to the shell. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|KineticOrb", meta = (ClampMin = "0", ClampMax = "4"))
+	int32 MinimumAvailableKineticOrbs = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|KineticOrb", meta = (ClampMin = "0.1", Units = "s"))
+	double KineticOrbSupplyIntervalSeconds = 5.0;
+
+	/** One stagger interrupts; this resolve window prevents a permanent gun stun loop. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Stagger", meta = (ClampMin = "0.1", Units = "s"))
+	double StaggerResolveSeconds = 4.5;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Stagger", meta = (ClampMin = "0.01", Units = "s"))
+	double StaggerReactionSeconds = 0.45;
+
+	/** Fallback for placed/non-PCG bosses; PCG may replace it with its authored safety plane. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Void", meta = (ClampMin = "100.0", Units = "cm"))
+	double VoidRecoveryDepthBelowSpawnCm = 450.0;
+
 private:
 	enum class ERamPhase : uint8
 	{
@@ -99,6 +138,7 @@ private:
 
 	UFUNCTION()
 	void HandleBossStaggered();
+	void HandleShellGroupBroken(EVectorAnchorGroupSide Side, int32 BrokenGroupCount);
 
 	void BeginRamTelegraph();
 	void LaunchRam();
@@ -112,6 +152,9 @@ private:
 	void ClearAmmoTargetPresentation();
 	AVectorEnemy* FindAmmoTarget() const;
 	bool ComputeAmmoLaunchVelocity(AVectorEnemy* AmmoTarget, FVector& OutVelocity) const;
+	bool SpawnKineticOrb(bool bLaunchTowardPlayer = true);
+	int32 CountActiveKineticOrbs() const;
+	void MaintainKineticOrbSupply(double DeltaSeconds);
 	void AdvanceRam(double DeltaSeconds);
 	void ApplyPhaseOutputs(EVectorPhysicsBossPhase PreviousPhase);
 	void UpdateBossPresentation();
@@ -124,4 +167,6 @@ private:
 	int32 AttackSequenceIndex = 0;
 	TWeakObjectPtr<AVectorEnemy> LockedAmmoTarget;
 	FVector LockedAmmoAimPoint = FVector::ZeroVector;
+	double KineticOrbSupplySecondsRemaining = 1.5;
+	bool bStaggerCounterBurstPending = false;
 };

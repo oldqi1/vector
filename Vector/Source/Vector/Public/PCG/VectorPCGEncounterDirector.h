@@ -83,7 +83,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
 	TSubclassOf<AVectorPhysicsBoss> BossClass;
 
-	/** Enforces the first formal slice contract (8 + 8 + Boss/2 adds). */
+	/** Enforces the demo route contract (authored 3-8 enemy rooms + Boss fixture). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
 	bool bRequireFormalRouteConfiguration = true;
 

@@ -99,4 +99,30 @@ bool FVectorTacticalLayoutFallbackTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FVectorTacticalCircuitContractTest,
+	"Vector.PCG.Layout.CombatCircuitContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FVectorTacticalCircuitContractTest::RunTest(const FString& Parameters)
+{
+	const TArray<FVectorTacticalModuleDefinition>& Catalog =
+		FVectorTacticalGenerator::GetEncounterModuleCatalog();
+	for (const FVectorTacticalModuleDefinition& Module : Catalog)
+	{
+		TestTrue(FString::Printf(TEXT("%s owns source/converter/receiver/recovery"),
+			*Module.ModuleId.ToString()), Module.HasCompleteCircuit());
+		TestTrue(FString::Printf(TEXT("%s exposes two opening verbs"),
+			*Module.ModuleId.ToString()), Module.HasDistinctOpenings());
+		TestTrue(FString::Printf(TEXT("%s exposes two recipes"),
+			*Module.ModuleId.ToString()), Module.Recipes.Num() >= 2);
+
+		FVectorTacticalModuleDefinition WithoutConverter = Module;
+		WithoutConverter.Converters.Reset();
+		TestFalse(FString::Printf(TEXT("%s loses its combat circuit when the converter is removed"),
+			*Module.ModuleId.ToString()), WithoutConverter.HasCompleteCircuit());
+	}
+	return true;
+}
+
 #endif

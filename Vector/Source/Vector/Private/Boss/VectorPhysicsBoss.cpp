@@ -2,11 +2,15 @@
 
 #include "Boss/VectorPhysicsBoss.h"
 
+#include "Boss/VectorKineticOrb.h"
+#include "Combat/VectorBreakableAnchorComponent.h"
 #include "Combat/VectorEnemyAttackComponent.h"
 #include "Combat/VectorHealthComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "DrawDebugHelpers.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/Character.h"
@@ -56,6 +60,11 @@ AVectorPhysicsBoss::AVectorPhysicsBoss(const FObjectInitializer& ObjectInitializ
 	MoveSpeedVarianceRatio = 0.0;
 	MoveSpeedCmPerSecond = 150.0;
 	GetCapsuleComponent()->InitCapsuleSize(105.0f, 120.0f);
+	BossPhaseLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("BossPhaseLight"));
+	BossPhaseLight->SetupAttachment(GetCapsuleComponent());
+	BossPhaseLight->SetRelativeLocation(FVector(0.0, 0.0, 110.0));
+	BossPhaseLight->SetCastShadows(false);
+	BossPhaseLight->SetVisibility(true);
 
 	if (HealthComponent)
 	{
@@ -72,11 +81,41 @@ AVectorPhysicsBoss::AVectorPhysicsBoss(const FObjectInitializer& ObjectInitializ
 		StabilityComponent->StaggeredPhysicalMassHeavy = 4.0;
 		StabilityComponent->DownedDurationSeconds = 2.1;
 	}
+	if (BreakableAnchorComponent)
+	{
+		BreakableAnchorComponent->MinimumClosingSpeedCmPerSecond = 720.0;
+		BreakableAnchorComponent->MinimumLateralAlignment = 0.50;
+		BreakableAnchorComponent->AnchoredPhysicalMass = 8.0;
+		BreakableAnchorComponent->UnstablePhysicalMass = 4.0;
+		BreakableAnchorComponent->LaunchablePhysicalMass = 3.0;
+		BreakableAnchorComponent->AnchoredGroundFriction = 1.6;
+		BreakableAnchorComponent->UnstableGroundFriction = 0.8;
+		BreakableAnchorComponent->LaunchableGroundFriction = 0.3;
+	}
+	if (LeftAnchorMesh && RightAnchorMesh)
+	{
+		LeftAnchorMesh->SetRelativeLocation(FVector(0.0, -145.0, 0.0));
+		RightAnchorMesh->SetRelativeLocation(FVector(0.0, 145.0, 0.0));
+		LeftAnchorMesh->SetRelativeScale3D(FVector(0.45, 0.24, 1.35));
+		RightAnchorMesh->SetRelativeScale3D(FVector(0.45, 0.24, 1.35));
+	}
+	PrototypeMeshOverride = TSoftObjectPtr<UStaticMesh>(FSoftObjectPath(
+		TEXT("/Game/Vector/Art/PrototypeMonsters/Dragon/SM_Prototype_Dragon.SM_Prototype_Dragon")));
+	PrototypeMeshScaleOverride = FVector(0.85);
+	KineticOrbClass = AVectorKineticOrb::StaticClass();
 }
 
 void AVectorPhysicsBoss::BeginPlay()
 {
 	Super::BeginPlay();
+	const FVector BossSpawnLocation = GetActorLocation();
+	ConfigureEncounterVoidRecovery(
+		BossSpawnLocation.Z - FMath::Max(100.0, VoidRecoveryDepthBelowSpawnCm),
+		BossSpawnLocation);
+	UE_LOG(LogVectorBoss, Log,
+		TEXT("Boss void contract configured: actor=%s source=LOCAL_FALLBACK floorZ=%.0f drop=%s outcome=ENVIRONMENTAL_KILL check=PASS"),
+		*GetName(), BossSpawnLocation.Z - FMath::Max(100.0, VoidRecoveryDepthBelowSpawnCm),
+		*BossSpawnLocation.ToCompactString());
 	MoveSpeedCmPerSecond = 150.0;
 	GetCharacterMovement()->MaxWalkSpeed = static_cast<float>(MoveSpeedCmPerSecond);
 	if (AttackComponent)
@@ -93,6 +132,11 @@ void AVectorPhysicsBoss::BeginPlay()
 		StabilityComponent->OnStaggered.AddDynamic(
 			this, &AVectorPhysicsBoss::HandleBossStaggered);
 	}
+	if (BreakableAnchorComponent)
+	{
+		BreakableAnchorComponent->OnAnchorGroupBroken.AddUObject(
+			this, &AVectorPhysicsBoss::HandleShellGroupBroken);
+	}
 	ApplyPhaseOutputs(BossState.GetPhase());
 	UE_LOG(LogVectorBoss, Log, TEXT("Boss started: actor=%s %s"),
 		*GetName(), *BossState.Describe());
@@ -105,7 +149,42 @@ void AVectorPhysicsBoss::Tick(const float DeltaSeconds)
 	{
 		return;
 	}
-	AdvanceRam(FMath::Max(0.0, static_cast<double>(DeltaSeconds)));
+	const double SafeDeltaSeconds = FMath::Max(0.0, static_cast<double>(DeltaSeconds));
+	const bool bResolveWasActive = BossState.IsStaggerResolveActive();
+	BossState.AdvanceStaggerResolve(SafeDeltaSeconds);
+	if (BossState.IsStaggerResolveActive())
+	{
+		// Resolve is not physics immunity: velocity and collision response remain intact.
+		// It only prevents stability shots from opening another action-cancel window.
+		if (StabilityComponent)
+		{
+			StabilityComponent->ResetStability();
+		}
+		if (BossPhaseLight)
+		{
+			BossPhaseLight->SetLightColor(FLinearColor(1.0f, 0.72f, 0.05f));
+			BossPhaseLight->SetIntensity(9000.0f);
+		}
+		if (GetWorld())
+		{
+			DrawDebugCircle(GetWorld(), GetActorLocation() + FVector(0.0, 0.0, 12.0),
+				190.0, 32, FColor::Yellow, false, 0.05f, 0, 7.0f,
+				FVector::ForwardVector, FVector::RightVector, false);
+		}
+	}
+	else if (bResolveWasActive)
+	{
+		if (StabilityComponent)
+		{
+			StabilityComponent->ResetStability();
+		}
+		UpdateBossPresentation();
+		UE_LOG(LogVectorBoss, Log,
+			TEXT("Boss stagger resolve expired: actor=%s nextInterrupt=AVAILABLE check=PASS"),
+			*GetName());
+	}
+	MaintainKineticOrbSupply(SafeDeltaSeconds);
+	AdvanceRam(SafeDeltaSeconds);
 }
 
 bool AVectorPhysicsBoss::ShouldPauseAI() const
@@ -136,11 +215,46 @@ void AVectorPhysicsBoss::HandleBossHealthChanged(
 
 void AVectorPhysicsBoss::HandleBossStaggered()
 {
+	const bool bAccepted = BossState.TryBeginStaggerResolve(
+		FMath::Max(0.1, StaggerResolveSeconds));
+	if (StabilityComponent)
+	{
+		StabilityComponent->ResetStability();
+	}
+	if (!bAccepted)
+	{
+		UE_LOG(LogVectorBoss, Log,
+			TEXT("Boss stagger rejected: actor=%s reason=RESOLVE_ACTIVE remaining=%.2fs check=PASS"),
+			*GetName(), BossState.GetStaggerResolveSecondsRemaining());
+		return;
+	}
+
+	SetAttackWarningPresentation(false);
+	ClearAmmoTargetPresentation();
+	RamPhase = ERamPhase::Recovery;
+	RamPhaseSecondsRemaining = FMath::Max(0.01, StaggerReactionSeconds);
+	bStaggerCounterBurstPending = true;
+	UE_LOG(LogVectorBoss, Log,
+		TEXT("Boss stagger accepted: actor=%s reaction=%.2fs resolve=%.2fs counter=AERIAL_BURST shellBypass=no check=PASS"),
+		*GetName(), RamPhaseSecondsRemaining,
+		BossState.GetStaggerResolveSecondsRemaining());
+}
+
+void AVectorPhysicsBoss::HandleShellGroupBroken(
+	const EVectorAnchorGroupSide Side,
+	const int32 BrokenGroupCount)
+{
 	const EVectorPhysicsBossPhase PreviousPhase = BossState.GetPhase();
-	if (BossState.NotifyStaggered())
+	if (BossState.NotifyStructureBroken(BrokenGroupCount))
 	{
 		ApplyPhaseOutputs(PreviousPhase);
 	}
+	UE_LOG(LogVectorBoss, Log,
+		TEXT("Boss shell structure: actor=%s side=%s broken=%d/2 previous=%d current=%d coreExposed=%s"),
+		*GetName(), Side == EVectorAnchorGroupSide::Right ? TEXT("RIGHT") : TEXT("LEFT"),
+		BrokenGroupCount, static_cast<int32>(PreviousPhase),
+		static_cast<int32>(BossState.GetPhase()),
+		BrokenGroupCount >= 2 ? TEXT("YES") : TEXT("no"));
 }
 
 void AVectorPhysicsBoss::BeginRamTelegraph()
@@ -219,6 +333,20 @@ void AVectorPhysicsBoss::AdvanceRam(const double DeltaSeconds)
 				AmmoLaunchFlightSeconds, FColor::Red);
 		}
 	}
+	else if (RamPhase == ERamPhase::AmmoLaunchTelegraph && GetWorld())
+	{
+		const FVector Start = GetActorLocation() + FVector(0.0, 0.0, 70.0);
+		FVector Direction = (LockedAmmoAimPoint - Start).GetSafeNormal2D();
+		if (Direction.IsNearlyZero())
+		{
+			Direction = GetActorForwardVector().GetSafeNormal2D();
+		}
+		DrawDebugDirectionalArrow(GetWorld(), Start,
+			Start + Direction * 850.0, 85.0f, FColor::Cyan,
+			false, 0.05f, 0, 8.0f);
+		DrawDebugSphere(GetWorld(), Start + Direction * 180.0,
+			45.0f, 16, FColor::Cyan, false, 0.05f, 0, 5.0f);
+	}
 	if (RamPhase == ERamPhase::SlamAirborne)
 	{
 		const UCharacterMovementComponent* BossMovement = GetCharacterMovement();
@@ -235,7 +363,8 @@ void AVectorPhysicsBoss::AdvanceRam(const double DeltaSeconds)
 		}
 	}
 
-	if (StabilityComponent && StabilityComponent->IsStaggered())
+	if (StabilityComponent && StabilityComponent->IsStaggered()
+		&& !BossState.IsStaggerResolveActive())
 	{
 		if (RamPhase == ERamPhase::Telegraph
 			|| RamPhase == ERamPhase::SlamTelegraph
@@ -296,6 +425,15 @@ void AVectorPhysicsBoss::AdvanceRam(const double DeltaSeconds)
 			*GetName(), RamPhaseSecondsRemaining);
 		break;
 	case ERamPhase::Recovery:
+		if (bStaggerCounterBurstPending)
+		{
+			bStaggerCounterBurstPending = false;
+			UE_LOG(LogVectorBoss, Log,
+				TEXT("Boss stagger counter begins: actor=%s attack=AERIAL_BURST resolveRemaining=%.2fs"),
+				*GetName(), BossState.GetStaggerResolveSecondsRemaining());
+			BeginAerialBurstTelegraph();
+			break;
+		}
 		RamPhase = ERamPhase::Waiting;
 		RamPhaseSecondsRemaining = BossState.GetRamIntervalSeconds();
 		UE_LOG(LogVectorBoss, Verbose, TEXT("Boss ram cycle ready: actor=%s next=%.2fs"),
@@ -338,7 +476,7 @@ void AVectorPhysicsBoss::LaunchSlam()
 
 void AVectorPhysicsBoss::BeginNextAttack()
 {
-	const bool bAmmoAvailable = FindAmmoTarget() != nullptr;
+	const bool bAmmoAvailable = KineticOrbClass != nullptr || FindAmmoTarget() != nullptr;
 	const EVectorPhysicsBossAttack Attack = BossState.SelectAttack(
 		AttackSequenceIndex++, bAmmoAvailable);
 	switch (Attack)
@@ -438,19 +576,23 @@ bool AVectorPhysicsBoss::BeginAmmoLaunchTelegraph()
 {
 	AVectorEnemy* AmmoTarget = FindAmmoTarget();
 	APawn* PlayerPawn = FindPlayerPawn();
-	if (!AmmoTarget || !PlayerPawn)
+	if (!PlayerPawn || (!AmmoTarget && !KineticOrbClass))
 	{
 		return false;
 	}
 	LockedAmmoTarget = AmmoTarget;
 	LockedAmmoAimPoint = PlayerPawn->GetActorLocation();
-	AmmoTarget->SetAttackWarningPresentation(true);
+	if (AmmoTarget)
+	{
+		AmmoTarget->SetAttackWarningPresentation(true);
+	}
 	SetAttackWarningPresentation(true);
 	RamPhase = ERamPhase::AmmoLaunchTelegraph;
 	RamPhaseSecondsRemaining = FMath::Max(0.01, AmmoLaunchTelegraphSeconds);
 	UE_LOG(LogVectorBoss, Log,
-		TEXT("Boss ammo arc telegraph: boss=%s ammo=%s aim=%s duration=%.2fs"),
-		*GetName(), *AmmoTarget->GetName(), *LockedAmmoAimPoint.ToCompactString(),
+		TEXT("Boss ammo telegraph: boss=%s mode=%s ammo=%s aim=%s duration=%.2fs"),
+		*GetName(), AmmoTarget ? TEXT("LIVE_ENEMY") : TEXT("KINETIC_ORB"),
+		*GetNameSafe(AmmoTarget), *LockedAmmoAimPoint.ToCompactString(),
 		RamPhaseSecondsRemaining);
 	return true;
 }
@@ -459,6 +601,18 @@ void AVectorPhysicsBoss::LaunchAmmoTarget()
 {
 	SetAttackWarningPresentation(false);
 	AVectorEnemy* AmmoTarget = LockedAmmoTarget.Get();
+	if (!AmmoTarget)
+	{
+		const bool bSpawned = SpawnKineticOrb(true);
+		UE_LOG(LogVectorBoss, Log,
+			TEXT("Boss reusable ammo release: boss=%s spawned=%s activeCap=%d"),
+			*GetName(), bSpawned ? TEXT("YES") : TEXT("no"),
+			MaximumActiveKineticOrbs);
+		ClearAmmoTargetPresentation();
+		RamPhase = ERamPhase::Recovery;
+		RamPhaseSecondsRemaining = BossState.GetRecoverySeconds();
+		return;
+	}
 	UVectorStabilityComponent* Stability = AmmoTarget
 		? AmmoTarget->FindComponentByClass<UVectorStabilityComponent>() : nullptr;
 	const bool bDisarmed = !AmmoTarget
@@ -495,6 +649,111 @@ void AVectorPhysicsBoss::LaunchAmmoTarget()
 	ClearAmmoTargetPresentation();
 	RamPhase = ERamPhase::Recovery;
 	RamPhaseSecondsRemaining = BossState.GetRecoverySeconds();
+}
+
+int32 AVectorPhysicsBoss::CountActiveKineticOrbs() const
+{
+	int32 ActiveCount = 0;
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<AVectorKineticOrb> Iterator(World); Iterator; ++Iterator)
+		{
+			const AVectorKineticOrb* Orb = *Iterator;
+			if (IsValid(Orb) && Orb->GetOwner() == this)
+			{
+				++ActiveCount;
+			}
+		}
+	}
+	return ActiveCount;
+}
+
+void AVectorPhysicsBoss::MaintainKineticOrbSupply(const double DeltaSeconds)
+{
+	if (!KineticOrbClass || BossState.IsDefeated()
+		|| MinimumAvailableKineticOrbs <= 0)
+	{
+		return;
+	}
+	KineticOrbSupplySecondsRemaining -= FMath::Max(0.0, DeltaSeconds);
+	if (KineticOrbSupplySecondsRemaining > 0.0)
+	{
+		return;
+	}
+	KineticOrbSupplySecondsRemaining = FMath::Max(0.1, KineticOrbSupplyIntervalSeconds);
+	const int32 ActiveCount = CountActiveKineticOrbs();
+	if (ActiveCount >= FMath::Max(0, MinimumAvailableKineticOrbs))
+	{
+		return;
+	}
+	const bool bSpawned = SpawnKineticOrb(false);
+	UE_LOG(LogVectorBoss, Log,
+		TEXT("Boss fallback ammo supply: boss=%s activeBefore=%d minimum=%d spawned=%s role=SHIELD_BREAK_AMMO check=%s"),
+		*GetName(), ActiveCount, MinimumAvailableKineticOrbs,
+		bSpawned ? TEXT("YES") : TEXT("no"), bSpawned ? TEXT("PASS") : TEXT("FAIL"));
+}
+
+bool AVectorPhysicsBoss::SpawnKineticOrb(const bool bLaunchTowardPlayer)
+{
+	UWorld* World = GetWorld();
+	if (!World || !KineticOrbClass)
+	{
+		return false;
+	}
+	int32 ActiveCount = 0;
+	AVectorKineticOrb* OldestOrb = nullptr;
+	double OldestAge = -1.0;
+	for (TActorIterator<AVectorKineticOrb> Iterator(World); Iterator; ++Iterator)
+	{
+		AVectorKineticOrb* Orb = *Iterator;
+		if (!IsValid(Orb) || Orb->GetOwner() != this)
+		{
+			continue;
+		}
+		++ActiveCount;
+		const double Age = Orb->GetGameTimeSinceCreation();
+		if (Age > OldestAge)
+		{
+			OldestAge = Age;
+			OldestOrb = Orb;
+		}
+	}
+	if (ActiveCount >= FMath::Max(1, MaximumActiveKineticOrbs) && OldestOrb)
+	{
+		UE_LOG(LogVectorBoss, Log,
+			TEXT("Boss orb budget recycles oldest: boss=%s orb=%s age=%.1f active=%d cap=%d"),
+			*GetName(), *OldestOrb->GetName(), OldestAge, ActiveCount,
+			MaximumActiveKineticOrbs);
+		OldestOrb->Destroy();
+	}
+
+	FVector Direction = (LockedAmmoAimPoint - GetActorLocation()).GetSafeNormal2D();
+	if (Direction.IsNearlyZero())
+	{
+		Direction = GetActorForwardVector().GetSafeNormal2D();
+	}
+	FVector SpawnLocation = GetActorLocation()
+		+ Direction * 190.0 + FVector(0.0, 0.0, 55.0);
+	if (!bLaunchTowardPlayer)
+	{
+		const FVector SideDirection(-Direction.Y, Direction.X, 0.0);
+		const double SideSign = (AttackSequenceIndex % 2 == 0) ? 1.0 : -1.0;
+		SpawnLocation = GetActorLocation() + Direction * 80.0
+			+ SideDirection * (300.0 * SideSign) + FVector(0.0, 0.0, 55.0);
+	}
+	FActorSpawnParameters Parameters;
+	Parameters.Owner = this;
+	Parameters.SpawnCollisionHandlingOverride =
+		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	AVectorKineticOrb* Orb = World->SpawnActor<AVectorKineticOrb>(
+		KineticOrbClass, SpawnLocation, Direction.Rotation(), Parameters);
+	if (!Orb)
+	{
+		return false;
+	}
+	return bLaunchTowardPlayer
+		? Orb->Launch(Direction, KineticOrbLaunchSpeedCmPerSecond, this)
+		: Orb->Arm(this);
 }
 
 void AVectorPhysicsBoss::ClearAmmoTargetPresentation()
@@ -594,19 +853,28 @@ void AVectorPhysicsBoss::ApplyPhaseOutputs(const EVectorPhysicsBossPhase Previou
 void AVectorPhysicsBoss::UpdateBossPresentation()
 {
 	FLinearColor Color(0.45f, 0.12f, 0.65f);
-	FVector Scale(2.1f, 2.1f, 2.4f);
+	float PhaseLightIntensity = 2600.0f;
+	const bool bUsingPrototypeMesh = BodyMesh
+		&& BodyMesh->GetStaticMesh()
+		&& BodyMesh->GetStaticMesh()->GetName() == TEXT("SM_Prototype_Dragon");
+	FVector Scale = bUsingPrototypeMesh
+		? PrototypeMeshScaleOverride
+		: FVector(2.1f, 2.1f, 2.4f);
 	switch (BossState.GetPhase())
 	{
 	case EVectorPhysicsBossPhase::ExposedShell:
 		Color = FLinearColor(1.0f, 0.45f, 0.06f);
-		Scale = FVector(1.95f, 1.95f, 2.2f);
+		PhaseLightIntensity = 4800.0f;
+		Scale *= 0.94f;
 		break;
 	case EVectorPhysicsBossPhase::Overload:
 		Color = FLinearColor(1.0f, 0.05f, 0.03f);
-		Scale = FVector(1.85f, 1.85f, 2.1f);
+		PhaseLightIntensity = 7600.0f;
+		Scale *= 0.90f;
 		break;
 	case EVectorPhysicsBossPhase::Defeated:
 		Color = FLinearColor(0.1f, 0.1f, 0.1f);
+		PhaseLightIntensity = 0.0f;
 		break;
 	case EVectorPhysicsBossPhase::AnchoredShell:
 	default:
@@ -617,12 +885,21 @@ void AVectorPhysicsBoss::UpdateBossPresentation()
 	if (BodyMesh)
 	{
 		BodyMesh->SetRelativeScale3D(Scale);
-		BodyMesh->SetRelativeLocation(FVector(0.0, 0.0,
-			-GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() + 50.0 * Scale.Z));
+		if (!bUsingPrototypeMesh)
+		{
+			BodyMesh->SetRelativeLocation(FVector(0.0, 0.0,
+				-GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() + 50.0 * Scale.Z));
+		}
 	}
 	if (BodyMaterial)
 	{
 		BodyMaterial->SetVectorParameterValue(TEXT("Color"), Color);
+	}
+	if (BossPhaseLight)
+	{
+		BossPhaseLight->SetLightColor(Color);
+		BossPhaseLight->SetIntensity(PhaseLightIntensity);
+		BossPhaseLight->SetAttenuationRadius(760.0f);
 	}
 }
 
