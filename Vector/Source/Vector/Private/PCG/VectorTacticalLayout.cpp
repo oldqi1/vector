@@ -27,6 +27,17 @@ namespace VectorTacticalLayoutInternal
 		});
 	}
 
+	FName GetRecipeOpening(const FString& Recipe)
+	{
+		const int32 SeparatorIndex = Recipe.Find(TEXT(">"));
+		if (SeparatorIndex <= 0)
+		{
+			return NAME_None;
+		}
+		const FString Opening = Recipe.Left(SeparatorIndex);
+		return FName(*Opening);
+	}
+
 	void ConfigureCircuit(FVectorTacticalModuleDefinition& Module)
 	{
 		switch (Module.Type)
@@ -60,7 +71,7 @@ namespace VectorTacticalLayoutInternal
 			Module.Converters = { TEXT("EnvironmentRedirector"), TEXT("LiftFork") };
 			Module.Receivers = { TEXT("UpperImpactDeck"), TEXT("LowerCrowd") };
 			Module.RecoveryPockets = { TEXT("UpperLanding") };
-			Module.SupportedToolVerbs = { TEXT("LiftConvert"), TEXT("CableRoute"), TEXT("VectorInject") };
+			Module.SupportedToolVerbs = { TEXT("BaitCharge"), TEXT("VectorInject"), TEXT("LiftConvert") };
 			Module.EnemyFunctionalSlots = { TEXT("Receiver"), TEXT("Source"), TEXT("Ammunition") };
 			Module.Recipes = {
 				TEXT("BaitCharge>EnvironmentRedirector>UpperImpactDeck"),
@@ -179,18 +190,41 @@ namespace VectorTacticalLayoutInternal
 		const TArray<FVectorTacticalModuleDefinition>& Catalog =
 			FVectorTacticalGenerator::GetEncounterModuleCatalog();
 		TArray<int32> RemainingIndices;
+		int32 HeightShelfIndex = INDEX_NONE;
 		for (int32 Index = 0; Index < Catalog.Num(); ++Index)
 		{
-			RemainingIndices.Add(Index);
+			if (Catalog[Index].Type == EVectorTacticalModuleType::HeightShelf)
+			{
+				HeightShelfIndex = Index;
+				if (!Rules.bRequireHeightShelfAsFinalEncounter)
+				{
+					RemainingIndices.Add(Index);
+				}
+			}
+			else
+			{
+				RemainingIndices.Add(Index);
+			}
 		}
 
 		FRandomStream Random(ResolvedSeed);
 		const int32 Count = FMath::Clamp(Rules.EncounterModuleCount, 0, Catalog.Num());
-		for (int32 Slot = 0; Slot < Count; ++Slot)
+		const bool bReserveHeightShelf = Rules.bRequireHeightShelfAsFinalEncounter
+			&& Count > 0 && HeightShelfIndex != INDEX_NONE;
+		const int32 RandomEncounterCount = Count - (bReserveHeightShelf ? 1 : 0);
+		for (int32 Slot = 0; Slot < RandomEncounterCount; ++Slot)
 		{
+			if (RemainingIndices.IsEmpty())
+			{
+				break;
+			}
 			const int32 Pick = Random.RandRange(0, RemainingIndices.Num() - 1);
 			Layout.Modules.Add(Catalog[RemainingIndices[Pick]]);
 			RemainingIndices.RemoveAt(Pick);
+		}
+		if (bReserveHeightShelf)
+		{
+			Layout.Modules.Add(Catalog[HeightShelfIndex]);
 		}
 
 		Layout.Modules.Add(MakeBossRing());
@@ -249,8 +283,16 @@ bool FVectorTacticalModuleDefinition::HasCompleteCircuit() const
 
 bool FVectorTacticalModuleDefinition::HasDistinctOpenings() const
 {
-	return SupportedToolVerbs.Num() >= 2
-		&& SupportedToolVerbs[0] != SupportedToolVerbs[1];
+	if (SupportedToolVerbs.Num() < 2 || Recipes.Num() < 2)
+	{
+		return false;
+	}
+	const FName FirstOpening =
+		VectorTacticalLayoutInternal::GetRecipeOpening(Recipes[0]);
+	const FName SecondOpening =
+		VectorTacticalLayoutInternal::GetRecipeOpening(Recipes[1]);
+	return !FirstOpening.IsNone() && !SecondOpening.IsNone()
+		&& FirstOpening != SecondOpening;
 }
 
 int32 FVectorTacticalModuleDefinition::CountRecipesUsingNode(const FName Node) const
@@ -381,6 +423,8 @@ bool FVectorTacticalGenerator::Validate(
 
 	int32 EncounterCount = 0;
 	int32 BossCount = 0;
+	int32 HeightShelfCount = 0;
+	EVectorTacticalModuleType LastEncounterType = EVectorTacticalModuleType::SafeStart;
 	EVectorPhysicsOpportunity EncounterOpportunities = EVectorPhysicsOpportunity::None;
 	EVectorPhysicsOpportunity PreviousOpportunities = EVectorPhysicsOpportunity::None;
 	bool bHasPreviousEncounter = false;
@@ -397,6 +441,11 @@ bool FVectorTacticalGenerator::Validate(
 		}
 
 		++EncounterCount;
+		LastEncounterType = Module.Type;
+		if (Module.Type == EVectorTacticalModuleType::HeightShelf)
+		{
+			++HeightShelfCount;
+		}
 		if (Module.EnemyBudget < Rules.MinimumEnemyBudget
 			|| Module.EnemyBudget > Rules.MaximumEnemyBudget)
 		{
@@ -468,6 +517,15 @@ bool FVectorTacticalGenerator::Validate(
 	{
 		OutFailureReason = FString::Printf(TEXT("module count invalid: encounters=%d boss=%d"),
 			EncounterCount, BossCount);
+		return false;
+	}
+	if (Rules.bRequireHeightShelfAsFinalEncounter
+		&& (HeightShelfCount != 1
+			|| LastEncounterType != EVectorTacticalModuleType::HeightShelf))
+	{
+		OutFailureReason = FString::Printf(
+			TEXT("demo route must end encounters with one HeightShelf: count=%d last=%d"),
+			HeightShelfCount, static_cast<int32>(LastEncounterType));
 		return false;
 	}
 	if (!EnumHasAnyFlags(EncounterOpportunities, EVectorPhysicsOpportunity::TetherSwingArc)

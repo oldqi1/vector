@@ -106,4 +106,5 @@ private:
 	void TryRedirect(AActor* OtherActor);
 
 	TSet<TWeakObjectPtr<AActor>> ConsumedActors;
+	double ActivationPulseSecondsRemaining = 0.0;
 };

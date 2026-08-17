@@ -66,6 +66,8 @@ struct VECTOR_API FVectorTacticalGenerationRules
 	int32 MaximumEnemyBudget = 12;
 	double MinimumTacticalScore = 12.0;
 	int32 MaximumGenerationAttempts = 16;
+	/** Demo route contract: keep PCG variation in room one, then teach HeightShelf before Boss. */
+	bool bRequireHeightShelfAsFinalEncounter = true;
 };
 
 struct VECTOR_API FVectorTacticalLayout

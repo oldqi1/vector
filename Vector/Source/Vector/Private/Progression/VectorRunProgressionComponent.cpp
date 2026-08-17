@@ -43,6 +43,25 @@ void UVectorRunProgressionComponent::TickComponent(
 
 void UVectorRunProgressionComponent::OpenRoomClearOffer(const int32 EncounterTotal)
 {
+	if (FVectorRunOfferPolicy::ShouldOfferRuleModuleFirst(
+		CompletedCalibrationCount, SelectedRuleModule))
+	{
+		PendingRuleModuleOffer = {
+			EVectorRunModuleType::MomentumRecycler,
+			EVectorRunModuleType::TwinVector,
+			EVectorRunModuleType::LiftVectorCoupler };
+		bRuleModuleOfferPending = true;
+		bSawActiveEnemiesSinceOffer = false;
+		LastOfferedEncounterTotal = EncounterTotal;
+		UE_LOG(LogVectorProgression, Log,
+			TEXT("Run first-clear rule module offered: total=%d choices=[%s|%s|%s] input=[Z|X|C] purpose=CHANGE_NEXT_ROOM_RULE"),
+			EncounterTotal,
+			*LexToString(PendingRuleModuleOffer[0]),
+			*LexToString(PendingRuleModuleOffer[1]),
+			*LexToString(PendingRuleModuleOffer[2]));
+		return;
+	}
+
 	static constexpr EVectorCalibrationType OfferSets[][3] =
 	{
 		{ EVectorCalibrationType::Impulse, EVectorCalibrationType::Capacity,
@@ -105,20 +124,6 @@ bool UVectorRunProgressionComponent::SelectPendingCalibration(const int32 OfferI
 	++CompletedCalibrationCount;
 	bOfferPending = false;
 	PendingOffer.Reset();
-	if (CompletedCalibrationCount == 2
-		&& SelectedRuleModule == EVectorRunModuleType::None)
-	{
-		PendingRuleModuleOffer = {
-			EVectorRunModuleType::MomentumRecycler,
-			EVectorRunModuleType::TwinVector,
-			EVectorRunModuleType::LiftVectorCoupler };
-		bRuleModuleOfferPending = true;
-		UE_LOG(LogVectorProgression, Log,
-			TEXT("Run rule module offered: choices=[%s|%s|%s] input=[Z|X|C]"),
-			*LexToString(PendingRuleModuleOffer[0]),
-			*LexToString(PendingRuleModuleOffer[1]),
-			*LexToString(PendingRuleModuleOffer[2]));
-	}
 	UE_LOG(LogVectorProgression, Log,
 		TEXT("Run calibration installed: type=%s level=%d range=%.2f impulse=%.2f cells=+%d rechargeInterval=%.2f check=PASS"),
 		*LexToString(Type), CalibrationState.GetLevel(Type),

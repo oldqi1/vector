@@ -51,5 +51,13 @@ struct VECTOR_API FVectorRunCalibrationState
 	int32 GetLevel(EVectorCalibrationType Type) const;
 };
 
+/** Pure ordering policy: the first clear changes rules before later raw calibration. */
+struct VECTOR_API FVectorRunOfferPolicy
+{
+	static bool ShouldOfferRuleModuleFirst(
+		int32 CompletedCalibrationCount,
+		EVectorRunModuleType SelectedRuleModule);
+};
+
 VECTOR_API FString LexToString(EVectorCalibrationType Type);
 VECTOR_API FString LexToString(EVectorRunModuleType Type);

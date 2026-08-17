@@ -154,6 +154,20 @@ void AVectorEnvironmentalRedirector::BeginPlay()
 void AVectorEnvironmentalRedirector::Tick(const float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	ActivationPulseSecondsRemaining = FMath::Max(
+		0.0, ActivationPulseSecondsRemaining - FMath::Max(0.0f, DeltaSeconds));
+	const double PulseAlpha = FMath::Clamp(
+		ActivationPulseSecondsRemaining / 0.35, 0.0, 1.0);
+	if (StatusLight)
+	{
+		StatusLight->SetIntensity(static_cast<float>(5200.0 + 8800.0 * PulseAlpha));
+	}
+	if (ExitMarkerMesh)
+	{
+		ExitMarkerMesh->SetRelativeScale3D(
+			FVector(3.2 + 1.2 * PulseAlpha, 0.18 + 0.12 * PulseAlpha,
+				0.18 + 0.12 * PulseAlpha));
+	}
 	if (!bDrawDebug || !GetWorld() || !TriggerBounds)
 	{
 		return;
@@ -254,6 +268,7 @@ void AVectorEnvironmentalRedirector::TryRedirect(AActor* OtherActor)
 	}
 
 	ConsumedActors.Add(ActorKey);
+	ActivationPulseSecondsRemaining = 0.35;
 	Movement->BeginMomentumCarry(MomentumCarrySeconds);
 	UE_LOG(LogVectorRedirector, Log,
 		TEXT("Environment redirect: redirector=%s actor=%s input=%s inputSpeed=%.0f exit=%s output=%s outputSpeed=%.0f efficiency=%.2f impulseDriven=1 firstThisOverlap=1 transport=%s budgetCheck=PASS"),

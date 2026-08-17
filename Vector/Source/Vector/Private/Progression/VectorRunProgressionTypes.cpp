@@ -56,6 +56,14 @@ int32 FVectorRunCalibrationState::GetLevel(const EVectorCalibrationType Type) co
 	}
 }
 
+bool FVectorRunOfferPolicy::ShouldOfferRuleModuleFirst(
+	const int32 CompletedCalibrationCount,
+	const EVectorRunModuleType SelectedRuleModule)
+{
+	return CompletedCalibrationCount == 0
+		&& SelectedRuleModule == EVectorRunModuleType::None;
+}
+
 FString LexToString(const EVectorCalibrationType Type)
 {
 	switch (Type)

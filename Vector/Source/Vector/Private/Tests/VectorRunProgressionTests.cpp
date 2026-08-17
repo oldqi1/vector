@@ -29,6 +29,15 @@ bool FVectorRunProgressionVerticalGrowthTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("cross-tool module has a readable offer label"),
 		LexToString(EVectorRunModuleType::LiftVectorCoupler),
 		FString(TEXT("LIFT-VECTOR COUPLER")));
+	TestTrue(TEXT("The first room clear offers a rule module before raw calibration"),
+		FVectorRunOfferPolicy::ShouldOfferRuleModuleFirst(
+			0, EVectorRunModuleType::None));
+	TestFalse(TEXT("An installed module cannot be offered again"),
+		FVectorRunOfferPolicy::ShouldOfferRuleModuleFirst(
+			0, EVectorRunModuleType::LiftVectorCoupler));
+	TestFalse(TEXT("Later clears move on to calibration"),
+		FVectorRunOfferPolicy::ShouldOfferRuleModuleFirst(
+			1, EVectorRunModuleType::None));
 	return true;
 }
 

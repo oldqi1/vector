@@ -361,6 +361,11 @@ def main(seed=SEED):
     sequence = list(library.generate_module_sequence(seed))
     if not sequence or sequence[0] != "SafeStart" or sequence[-1] != "Extraction":
         raise RuntimeError("invalid generated sequence: %s" % sequence)
+    if (len(sequence) != 5 or sequence[2] != "HeightShelf"
+            or sequence[3] != "BossRing"):
+        raise RuntimeError(
+            "demo route gate failed; expected Encounter>HeightShelf>BossRing: %s"
+            % sequence)
 
     classes = {
         "player_start": load_native_class("/Script/Engine.PlayerStart"),

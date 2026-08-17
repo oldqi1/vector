@@ -37,6 +37,27 @@ bool FVectorTacticalLayoutDiversityTest::RunTest(const FString& Parameters)
 		}
 	}
 	TestTrue(TEXT("Different seeds can change the tactical layout"), bFoundDifferentLayout);
+
+	FVectorTacticalGenerationRules SandboxRules;
+	SandboxRules.bRequireHeightShelfAsFinalEncounter = false;
+	bool bFoundValidNonDemoRouteWithoutHeightShelf = false;
+	for (int32 Seed = 1; Seed <= 64; ++Seed)
+	{
+		const FVectorTacticalLayout Layout =
+			FVectorTacticalGenerator::Generate(Seed, SandboxRules);
+		const bool bHasHeightShelf = Layout.Modules.ContainsByPredicate(
+			[](const FVectorTacticalModuleDefinition& Module)
+			{
+				return Module.Type == EVectorTacticalModuleType::HeightShelf;
+			});
+		if (Layout.bValid && !bHasHeightShelf)
+		{
+			bFoundValidNonDemoRouteWithoutHeightShelf = true;
+			break;
+		}
+	}
+	TestTrue(TEXT("Disabling the Demo route gate preserves the broader PCG framework"),
+		bFoundValidNonDemoRouteWithoutHeightShelf);
 	return true;
 }
 
@@ -74,11 +95,25 @@ bool FVectorTacticalLayoutConstraintsTest::RunTest(const FString& Parameters)
 			bEncounterOwnsHeightRecipe);
 		TestTrue(FString::Printf(TEXT("Seed %d meets score"), Seed),
 			Layout.TacticalScore >= 12.0);
+		TestEqual(FString::Printf(TEXT("Seed %d keeps two demo encounters"), Seed),
+			Layout.Modules.Num(), 5);
+		TestTrue(FString::Printf(TEXT("Seed %d teaches HeightShelf immediately before Boss"), Seed),
+			Layout.Modules[2].Type == EVectorTacticalModuleType::HeightShelf
+			&& Layout.Modules[3].Type == EVectorTacticalModuleType::BossRing);
 	}
 	const TArray<FVectorTacticalModuleDefinition>& Catalog =
 		FVectorTacticalGenerator::GetEncounterModuleCatalog();
 	TestEqual(TEXT("OpenBowl stays deliberately flat"), Catalog[0].HeightLayerCount, 1);
 	TestEqual(TEXT("SlickCross stays deliberately flat"), Catalog[3].HeightLayerCount, 1);
+	FVectorTacticalLayout WrongOrder = FVectorTacticalGenerator::Generate(4417);
+	WrongOrder.Modules.Swap(1, 2);
+	WrongOrder.TacticalScore = FVectorTacticalGenerator::ComputeTacticalScore(WrongOrder);
+	FString WrongOrderReason;
+	TestFalse(TEXT("A HeightShelf placed before the first encounter fails the demo route gate"),
+		FVectorTacticalGenerator::Validate(
+			WrongOrder, FVectorTacticalGenerationRules(), WrongOrderReason));
+	TestTrue(TEXT("Wrong-order failure explains the HeightShelf route contract"),
+		WrongOrderReason.Contains(TEXT("HeightShelf")));
 	return true;
 }
 
@@ -130,6 +165,10 @@ bool FVectorTacticalCircuitContractTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("HeightShelf routes start with different player decisions"),
 		HeightShelf.Recipes[0].StartsWith(TEXT("BaitCharge>"))
 		&& HeightShelf.Recipes[1].StartsWith(TEXT("VectorInject>")));
+	FVectorTacticalModuleDefinition DuplicateOpening = HeightShelf;
+	DuplicateOpening.Recipes[1] = TEXT("BaitCharge>LiftFork>DirectedSlam>LowerCrowd");
+	TestFalse(TEXT("Recipe data—not a parallel label list—rejects duplicate openings"),
+		DuplicateOpening.HasDistinctOpenings());
 	const FName EnvironmentRedirector(TEXT("EnvironmentRedirector"));
 	const FName LiftFork(TEXT("LiftFork"));
 	TestEqual(TEXT("Removing the environment converter deletes exactly one route"),
