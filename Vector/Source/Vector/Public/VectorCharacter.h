@@ -18,6 +18,7 @@ class UVectorHealthComponent;
 class UVectorPhysicsModifierComponent;
 class UVectorModifierApplicatorComponent;
 class UVectorLiftForkComponent;
+class UDamageType;
 
 /** EnhancedInput 值类型；注意是 struct（USTRUCT），须按引用前向声明。 */
 struct FInputActionValue;
@@ -52,6 +53,7 @@ public:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+	virtual void FellOutOfWorld(const UDamageType& DamageType) override;
 
 	UFUNCTION(BlueprintPure, Category = "Vector|Equipment")
 	EVectorEquipmentSlot GetSelectedEquipmentSlot() const { return SelectedEquipmentSlot; }
@@ -142,6 +144,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Physics")
 	TObjectPtr<UVectorPhysicsModifierComponent> PhysicsModifierComponent;
 
+	/** How far below the active checkpoint the player may fall before void recovery starts. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Hunt", meta = (ClampMin = "100.0", Units = "cm"))
+	double VoidRecoveryDropBelowCheckpointCm = 450.0;
+
 private:
 	/** 必要时构造运行时输入上下文并绑定。 */
 	void EnsureRuntimeInput();
@@ -181,6 +187,10 @@ private:
 	/** 玩家生命归零：灰盒重生（回原点 + 满血）。 */
 	UFUNCTION()
 	void HandlePlayerDeath();
+
+	/** Uses the normal death/reset chain without touching the encounter ledger. */
+	void TriggerVoidRecovery(const TCHAR* TriggerReason);
+	void RefreshVoidRecoveryFloor();
 
 	/** 当前正在播放的动画；用于去重避免每帧重复触发。 */
 	UPROPERTY(Transient)
@@ -236,4 +246,6 @@ private:
 
 	/** 灰盒重生点：BeginPlay 时实际出生 Transform（通常来自 PlayerStart）。 */
 	FTransform RespawnTransform = FTransform::Identity;
+	double ActiveVoidRecoveryFloorWorldZ = -350.0;
+	bool bVoidRecoveryInProgress = false;
 };

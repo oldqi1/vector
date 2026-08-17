@@ -252,10 +252,20 @@ void AVectorPCGEncounterDirector::HandleEncounterProgress(
 	if (ClearedWaveIndex == 0 && WaveOneExitGate)
 	{
 		WaveOneExitGate->SetGateLocked(false);
+		UE_LOG(LogVectorPCGEncounter, Log,
+			TEXT("PCG room exit verified: wave=1 gate=%s locked=%s check=%s"),
+			*WaveOneExitGate->GetName(),
+			WaveOneExitGate->IsGateLocked() ? TEXT("YES") : TEXT("no"),
+			WaveOneExitGate->IsGateLocked() ? TEXT("FAIL") : TEXT("PASS"));
 	}
 	else if (ClearedWaveIndex == 1 && WaveTwoExitGate)
 	{
 		WaveTwoExitGate->SetGateLocked(false);
+		UE_LOG(LogVectorPCGEncounter, Log,
+			TEXT("PCG room exit verified: wave=2 gate=%s locked=%s check=%s"),
+			*WaveTwoExitGate->GetName(),
+			WaveTwoExitGate->IsGateLocked() ? TEXT("YES") : TEXT("no"),
+			WaveTwoExitGate->IsGateLocked() ? TEXT("FAIL") : TEXT("PASS"));
 	}
 	else if (ClearedWaveIndex == 2)
 	{

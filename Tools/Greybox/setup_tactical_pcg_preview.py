@@ -90,6 +90,22 @@ def spawn_boundary(center_x, half_x=1200.0, half_y=1100.0):
                (half_x / 50.0, 1.0, 3.5), "BoundarySouth")
 
 
+def spawn_split_receiver_wall(center_x, half_width, exit_gap, label):
+    """Keep two impact receivers while reserving a permanent central route."""
+    if exit_gap < 650.0 or exit_gap >= half_width * 2.0:
+        raise RuntimeError("invalid receiver exit gap: %s %.0f" %
+                           (label, exit_gap))
+    wing_width = half_width - exit_gap * 0.5
+    wing_center_y = exit_gap * 0.5 + wing_width * 0.5
+    for suffix, sign in (("North", 1.0), ("South", -1.0)):
+        spawn_cube(
+            (center_x, sign * wing_center_y, 125.0),
+            (1.0, wing_width / 100.0, 3.5),
+            "%s_%s" % (label, suffix),
+        )
+    log("receiver=%s permanentExitGap=%.0f" % (label, exit_gap))
+
+
 def spawn_ramp_x(start_x, center_y, direction, run, rise,
                  width=500.0, base_z=0.0, thickness=40.0, label="Ramp"):
     """Build one broad walkable slope whose upper edge meets a combat deck."""
@@ -127,8 +143,8 @@ def build_safe_start(center_x, target_point_class, player_start_class):
 def build_open_bowl(center_x, target_point_class):
     spawn_floor(center_x, suffix="OpenBowl_Floor")
     spawn_boundary(center_x)
-    spawn_cube((center_x + 1050.0, 0.0, 125.0),
-               (1.0, 22.0, 3.5), "OpenBowl_ImpactWall")
+    spawn_split_receiver_wall(
+        center_x + 1050.0, 1100.0, 700.0, "OpenBowl_ImpactReceiver")
     # Intentionally flat: its value is an unobstructed long launch/tether arc.
     # Adding an unrelated deck would dilute the contrast with HeightShelf.
     markers = []
@@ -145,7 +161,8 @@ def build_hard_lane(center_x, target_point_class):
     spawn_floor(center_x, suffix="HardLane_Floor")
     spawn_cube((center_x, 500.0, 125.0), (24.0, 1.0, 3.5), "HardLane_WallNorth")
     spawn_cube((center_x, -500.0, 125.0), (24.0, 1.0, 3.5), "HardLane_WallSouth")
-    spawn_cube((center_x + 1150.0, 0.0, 125.0), (1.0, 11.0, 3.5), "HardLane_Receiver")
+    spawn_split_receiver_wall(
+        center_x + 1150.0, 550.0, 650.0, "HardLane_ImpactReceiver")
     # A broad chute, not decorative stairs: the low charger owns the straight
     # bait line while the upper heavy can be knocked into that line/crowd.
     spawn_cube((center_x + 350.0, 250.0, 160.0),

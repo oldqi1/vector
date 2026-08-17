@@ -28,6 +28,8 @@
 #include "Physics/VectorPhysicsModifierComponent.h"
 #include "UObject/ConstructorHelpers.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogVectorPlayer, Log, All);
+
 AVectorCharacter::AVectorCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UVectorCharacterMovementComponent>(
 		ACharacter::CharacterMovementComponentName))
@@ -110,6 +112,7 @@ void AVectorCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	RespawnTransform = GetActorTransform();
+	RefreshVoidRecoveryFloor();
 
 	// 固定倾角：只保留 Yaw 作为玩家控制的水平旋转自由度。
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
@@ -181,6 +184,7 @@ void AVectorCharacter::HandlePlayerDeath()
 	{
 		Movement->SetMovementMode(MOVE_Walking);
 	}
+	bVoidRecoveryInProgress = false;
 	UE_LOG(LogTemp, Log, TEXT("Player died -> respawn at %s teleported=%s velocity=%s mode=%s"),
 		*RespawnTransform.GetLocation().ToCompactString(),
 		bTeleported ? TEXT("YES") : TEXT("FAILED"),
@@ -196,6 +200,7 @@ bool AVectorCharacter::SetRespawnCheckpoint(const FTransform& NewRespawnTransfor
 	}
 	RespawnTransform = NewRespawnTransform;
 	RespawnTransform.SetScale3D(FVector::OneVector);
+	RefreshVoidRecoveryFloor();
 	UE_LOG(LogTemp, Log, TEXT("Player checkpoint updated: location=%s rotation=%s"),
 		*RespawnTransform.GetLocation().ToCompactString(),
 		*RespawnTransform.Rotator().ToCompactString());
@@ -205,7 +210,64 @@ bool AVectorCharacter::SetRespawnCheckpoint(const FTransform& NewRespawnTransfor
 void AVectorCharacter::Tick(const float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	if (!bVoidRecoveryInProgress
+		&& HealthComponent
+		&& !HealthComponent->IsDead()
+		&& GetActorLocation().Z < ActiveVoidRecoveryFloorWorldZ)
+	{
+		TriggerVoidRecovery(TEXT("checkpoint_floor"));
+	}
 	UpdateRobotAnimation();
+}
+
+void AVectorCharacter::FellOutOfWorld(const UDamageType& DamageType)
+{
+	if (!bVoidRecoveryInProgress)
+	{
+		TriggerVoidRecovery(TEXT("world_kill_z"));
+		return;
+	}
+
+	Super::FellOutOfWorld(DamageType);
+}
+
+void AVectorCharacter::TriggerVoidRecovery(const TCHAR* TriggerReason)
+{
+	if (bVoidRecoveryInProgress)
+	{
+		return;
+	}
+
+	bVoidRecoveryInProgress = true;
+	UE_LOG(LogVectorPlayer, Warning,
+		TEXT("Player void recovery: reason=%s location=%s floorZ=%.0f checkpoint=%s encounterLedger=UNCHANGED"),
+		TriggerReason,
+		*GetActorLocation().ToCompactString(),
+		ActiveVoidRecoveryFloorWorldZ,
+		*RespawnTransform.GetLocation().ToCompactString());
+
+	// Reuse the combat-death cleanup path so health, queued velocity, active
+	// equipment and the action lock cannot survive the checkpoint teleport.
+	// Player death is intentionally unrelated to the enemy encounter ledger.
+	if (HealthComponent && !HealthComponent->IsDead())
+	{
+		HealthComponent->ApplyDamage(FMath::Max(1.0, HealthComponent->GetHealth()));
+	}
+	else
+	{
+		HandlePlayerDeath();
+	}
+}
+
+void AVectorCharacter::RefreshVoidRecoveryFloor()
+{
+	ActiveVoidRecoveryFloorWorldZ = RespawnTransform.GetLocation().Z
+		- FMath::Max(100.0, VoidRecoveryDropBelowCheckpointCm);
+	UE_LOG(LogVectorPlayer, Verbose,
+		TEXT("Player void floor updated: checkpointZ=%.0f drop=%.0f floorZ=%.0f"),
+		RespawnTransform.GetLocation().Z,
+		VoidRecoveryDropBelowCheckpointCm,
+		ActiveVoidRecoveryFloorWorldZ);
 }
 
 void AVectorCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
