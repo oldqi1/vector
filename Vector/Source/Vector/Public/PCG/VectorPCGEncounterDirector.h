@@ -103,7 +103,7 @@ private:
 	bool ValidateRouteConfiguration(FString& OutFailureReason) const;
 	int32 SpawnEncounterWave(const TArray<TObjectPtr<AActor>>& SpawnPoints, int32 WaveIndex);
 	int32 SpawnBossWave();
-	AVectorEnemy* SpawnEnemyAt(AActor* SpawnPoint, int32 SpawnIndex);
+	AVectorEnemy* SpawnEnemyAt(AActor* SpawnPoint, int32 SpawnIndex, int32 WaveIndex);
 	AVectorPhysicsBoss* SpawnBossAt(AActor* SpawnPoint);
 
 	UPROPERTY(Transient)

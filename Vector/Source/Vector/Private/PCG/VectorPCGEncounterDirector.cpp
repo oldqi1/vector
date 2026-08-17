@@ -14,6 +14,57 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogVectorPCGEncounter, Log, All);
 
+namespace
+{
+	bool IsSupportedEncounterModule(const FString& ModuleName)
+	{
+		return ModuleName == TEXT("OpenBowl")
+			|| ModuleName == TEXT("HardLane")
+			|| ModuleName == TEXT("HeightShelf")
+			|| ModuleName == TEXT("SlickCross");
+	}
+
+	EVectorEnemyArchetype SelectModuleArchetype(
+		const FString& ModuleName,
+		const int32 SpawnIndex)
+	{
+		// Slot order is authored with the geometry. Launchers occupy the layer
+		// that exposes this module's physical recipe; rooms do not share one list.
+		if (ModuleName == TEXT("HeightShelf"))
+		{
+			return SpawnIndex == 0 ? EVectorEnemyArchetype::HeavyRhinoBeetle
+				: SpawnIndex == 1 ? EVectorEnemyArchetype::ChargerRammer
+				: EVectorEnemyArchetype::LightHoppper;
+		}
+		if (ModuleName == TEXT("HardLane"))
+		{
+			return SpawnIndex == 0 ? EVectorEnemyArchetype::ChargerRammer
+				: SpawnIndex == 1 ? EVectorEnemyArchetype::HeavyRhinoBeetle
+				: EVectorEnemyArchetype::LightHoppper;
+		}
+		if (ModuleName == TEXT("SlickCross"))
+		{
+			return SpawnIndex == 0 ? EVectorEnemyArchetype::HeavyRhinoBeetle
+				: SpawnIndex == 4 ? EVectorEnemyArchetype::ChargerRammer
+				: EVectorEnemyArchetype::LightHoppper;
+		}
+		return SpawnIndex == 0 ? EVectorEnemyArchetype::HeavyRhinoBeetle
+			: SpawnIndex == 1 ? EVectorEnemyArchetype::ChargerRammer
+			: EVectorEnemyArchetype::LightHoppper;
+	}
+
+	const TCHAR* ArchetypeToLogText(const EVectorEnemyArchetype Archetype)
+	{
+		switch (Archetype)
+		{
+		case EVectorEnemyArchetype::HeavyRhinoBeetle: return TEXT("HeavyRhinoBeetle");
+		case EVectorEnemyArchetype::ChargerRammer: return TEXT("ChargerRammer");
+		case EVectorEnemyArchetype::LightHoppper:
+		default: return TEXT("LightHopper");
+		}
+	}
+}
+
 AVectorPCGEncounterDirector::AVectorPCGEncounterDirector()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -147,6 +198,14 @@ bool AVectorPCGEncounterDirector::ValidateRouteConfiguration(
 		OutFailureReason = TEXT("module sequence must be SafeStart>room>room>BossRing>Extraction");
 		return false;
 	}
+	if (!IsSupportedEncounterModule(ModuleSequence[1])
+		|| !IsSupportedEncounterModule(ModuleSequence[2]))
+	{
+		OutFailureReason = FString::Printf(
+			TEXT("encounter modules must own a supported geometry/enemy recipe, found %s/%s"),
+			*ModuleSequence[1], *ModuleSequence[2]);
+		return false;
+	}
 	return true;
 }
 
@@ -260,7 +319,7 @@ int32 AVectorPCGEncounterDirector::SpawnEncounterWave(
 	int32 SpawnedCount = 0;
 	for (int32 Index = 0; Index < SpawnPoints.Num(); ++Index)
 	{
-		if (AVectorEnemy* Enemy = SpawnEnemyAt(SpawnPoints[Index], Index))
+		if (AVectorEnemy* Enemy = SpawnEnemyAt(SpawnPoints[Index], Index, WaveIndex))
 		{
 			if (Encounter->RegisterSpawnedEnemy(Enemy))
 			{
@@ -296,7 +355,7 @@ int32 AVectorPCGEncounterDirector::SpawnBossWave()
 	}
 	for (int32 Index = 0; Index < BossAddSpawnPoints.Num(); ++Index)
 	{
-		if (AVectorEnemy* Enemy = SpawnEnemyAt(BossAddSpawnPoints[Index], Index + 2))
+		if (AVectorEnemy* Enemy = SpawnEnemyAt(BossAddSpawnPoints[Index], Index, -1))
 		{
 			if (Encounter->RegisterSpawnedEnemy(Enemy))
 			{
@@ -313,7 +372,8 @@ int32 AVectorPCGEncounterDirector::SpawnBossWave()
 
 AVectorEnemy* AVectorPCGEncounterDirector::SpawnEnemyAt(
 	AActor* SpawnPoint,
-	const int32 SpawnIndex)
+	const int32 SpawnIndex,
+	const int32 WaveIndex)
 {
 	if (!GetWorld() || !EnemyClass || !SpawnPoint)
 	{
@@ -328,19 +388,18 @@ AVectorEnemy* AVectorPCGEncounterDirector::SpawnEnemyAt(
 	{
 		return nullptr;
 	}
-	if (SpawnIndex == 0)
-	{
-		Enemy->Archetype = EVectorEnemyArchetype::HeavyRhinoBeetle;
-	}
-	else if (SpawnIndex == 1)
-	{
-		Enemy->Archetype = EVectorEnemyArchetype::ChargerRammer;
-	}
-	else
-	{
-		Enemy->Archetype = EVectorEnemyArchetype::LightHoppper;
-	}
+	const int32 ModuleIndex = WaveIndex + 1;
+	const FString ModuleName = WaveIndex >= 0 && ModuleSequence.IsValidIndex(ModuleIndex)
+		? ModuleSequence[ModuleIndex]
+		: TEXT("BossRing");
+	Enemy->Archetype = WaveIndex >= 0
+		? SelectModuleArchetype(ModuleName, SpawnIndex)
+		: EVectorEnemyArchetype::LightHoppper;
 	UGameplayStatics::FinishSpawningActor(Enemy, SpawnTransform);
+	UE_LOG(LogVectorPCGEncounter, Log,
+		TEXT("PCG enemy slot: module=%s wave=%d slot=%d z=%.0f archetype=%s"),
+		*ModuleName, WaveIndex + 1, SpawnIndex, SpawnPoint->GetActorLocation().Z,
+		ArchetypeToLogText(Enemy->Archetype));
 	return Enemy;
 }
 
