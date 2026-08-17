@@ -76,6 +76,17 @@ def spawn_marker(target_point_class, location, label):
     return marker
 
 
+def spawn_circuit_role(role_marker_class, location, label, role, color):
+    """Add presentation only beside a node that already owns real gameplay."""
+    marker = subsystem().spawn_actor_from_class(
+        role_marker_class, unreal.Vector(*location))
+    if marker is None:
+        raise RuntimeError("failed to spawn circuit role marker: %s" % label)
+    marker.set_actor_label(PREFIX + label)
+    marker.configure_role(unreal.Name(role), unreal.LinearColor(*color))
+    return marker
+
+
 def spawn_floor(center_x, width=2400.0, depth=2200.0, suffix="Floor"):
     return spawn_cube(
         (center_x, 0.0, -50.0),
@@ -155,7 +166,7 @@ def build_safe_start(center_x, target_point_class, player_start_class):
                  "SafeStart_Recovery")
 
 
-def build_open_bowl(center_x, target_point_class):
+def build_open_bowl(center_x, target_point_class, role_marker_class):
     spawn_floor(center_x, suffix="OpenBowl_Floor")
     spawn_boundary(center_x)
     # Authoring circuit (not player-facing labels):
@@ -173,6 +184,15 @@ def build_open_bowl(center_x, target_point_class):
                (1.25, 1.25, 4.5), "OpenBowl_Converter_TetherPillarNorth")
     spawn_split_receiver_wall(
         center_x + 1050.0, 1100.0, 700.0, "OpenBowl_ImpactReceiver")
+    spawn_circuit_role(
+        role_marker_class, (center_x - 720.0, -520.0, 15.0),
+        "OpenBowl_SourceRole", "SOURCE", (1.0, 0.28, 0.03, 1.0))
+    spawn_circuit_role(
+        role_marker_class, (center_x - 120.0, 0.0, 15.0),
+        "OpenBowl_ConverterRole", "CONVERTER", (0.02, 0.9, 1.0, 1.0))
+    spawn_circuit_role(
+        role_marker_class, (center_x + 760.0, 0.0, 15.0),
+        "OpenBowl_ReceiverRole", "RECEIVER", (1.0, 0.06, 0.62, 1.0))
     # Intentionally flat: its tactical verb is horizontal redirection.
     markers = []
     # Runtime index contract: 0=heavy receiver, 1=charger source, remaining=light ammo.
@@ -187,7 +207,7 @@ def build_open_bowl(center_x, target_point_class):
         "receiver=two anchor groups recovery=entry-west routes=direct/wall/tether")
 
 
-def build_hard_lane(center_x, target_point_class):
+def build_hard_lane(center_x, target_point_class, role_marker_class):
     spawn_floor(center_x, suffix="HardLane_Floor")
     spawn_cube((center_x, 500.0, 125.0), (24.0, 1.0, 3.5), "HardLane_WallNorth")
     spawn_cube((center_x, -500.0, 125.0), (24.0, 1.0, 3.5), "HardLane_WallSouth")
@@ -199,6 +219,15 @@ def build_hard_lane(center_x, target_point_class):
                (11.0, 4.0, 3.6), "HardLane_UpperLane")
     spawn_ramp_x(center_x - 950.0, 250.0, 1.0, 800.0, 340.0,
                  width=350.0, label="HardLane_MomentumRamp")
+    spawn_circuit_role(
+        role_marker_class, (center_x - 850.0, -260.0, 15.0),
+        "HardLane_SourceRole", "SOURCE", (1.0, 0.28, 0.03, 1.0))
+    spawn_circuit_role(
+        role_marker_class, (center_x - 500.0, 250.0, 160.0),
+        "HardLane_ConverterRole", "CONVERTER", (0.02, 0.9, 1.0, 1.0))
+    spawn_circuit_role(
+        role_marker_class, (center_x + 900.0, 0.0, 15.0),
+        "HardLane_ReceiverRole", "RECEIVER", (1.0, 0.06, 0.62, 1.0))
     markers = []
     offsets = ((-850, -260, 80), (150, 250, 430), (-500, -100, 80),
                (-150, -260, 80), (-50, 250, 400), (300, -150, 80),
@@ -210,7 +239,8 @@ def build_hard_lane(center_x, target_point_class):
     ENCOUNTER_WAVES.append(markers)
 
 
-def build_height_shelf(center_x, target_point_class, redirector_class):
+def build_height_shelf(center_x, target_point_class, redirector_class,
+                       role_marker_class):
     spawn_floor(center_x, suffix="HeightShelf_Floor")
     spawn_boundary(center_x)
     spawn_cube((center_x + 650.0, 0.0, 250.0),
@@ -226,6 +256,9 @@ def build_height_shelf(center_x, target_point_class, redirector_class):
                (1.0, 22.0, 3.5), "HeightShelf_LowerReceiverWall")
     spawn_cube((center_x - 760.0, 0.0, -38.0),
                (4.2, 14.0, 0.14), "HeightShelf_LowerCrowdReceiver")
+    spawn_circuit_role(
+        role_marker_class, (center_x - 650.0, -450.0, 235.0),
+        "HeightShelf_SourceRole", "SOURCE", (1.0, 0.28, 0.03, 1.0))
     if ENABLE_HEIGHT_REDIRECTOR:
         redirector = subsystem().spawn_actor_from_class(
             redirector_class,
@@ -237,6 +270,9 @@ def build_height_shelf(center_x, target_point_class, redirector_class):
             unreal.Rotator(roll=0.0, pitch=50.0, yaw=0.0), False)
         redirector.set_editor_property("redirect_efficiency", 0.88)
         redirector.set_editor_property("minimum_input_speed_cm_per_second", 220.0)
+        spawn_circuit_role(
+            role_marker_class, (center_x - 20.0, -250.0, 330.0),
+            "HeightShelf_ConverterRole", "CONVERTER", (0.02, 0.9, 1.0, 1.0))
         log("HeightShelf route A: charger/orb -> EnvironmentRedirector -> upper deck")
     else:
         log("HeightShelf deletion test: EnvironmentRedirector REMOVED; "
@@ -252,10 +288,14 @@ def build_height_shelf(center_x, target_point_class, redirector_class):
             target_point_class, (center_x + offset[0], offset[1], offset[2]),
             "HeightShelf_Enemy_%02d" % index))
     ENCOUNTER_WAVES.append(markers)
+    spawn_circuit_role(
+        role_marker_class, (center_x - 760.0, 520.0, 15.0),
+        "HeightShelf_ReceiverRole", "RECEIVER", (1.0, 0.06, 0.62, 1.0))
     log("HeightShelf route B: vector injection -> LiftFork -> directed slam -> lower crowd")
 
 
-def build_slick_cross(center_x, target_point_class, friction_class):
+def build_slick_cross(center_x, target_point_class, friction_class,
+                      role_marker_class):
     spawn_floor(center_x, suffix="SlickCross_Floor")
     spawn_boundary(center_x)
     spawn_cube((center_x, 0.0, -42.0), (18.0, 5.0, 0.12), "SlickCross_MarkerX")
@@ -267,6 +307,15 @@ def build_slick_cross(center_x, target_point_class, friction_class):
     if zone is None:
         raise RuntimeError("failed to spawn low-friction zone")
     zone.set_actor_label(PREFIX + "SlickCross_LowFrictionZone")
+    spawn_circuit_role(
+        role_marker_class, (center_x + 250.0, 550.0, 15.0),
+        "SlickCross_SourceRole", "SOURCE", (1.0, 0.28, 0.03, 1.0))
+    spawn_circuit_role(
+        role_marker_class, (center_x, 0.0, 15.0),
+        "SlickCross_ConverterRole", "CONVERTER", (0.02, 0.9, 1.0, 1.0))
+    spawn_circuit_role(
+        role_marker_class, (center_x - 700.0, 0.0, 15.0),
+        "SlickCross_ReceiverRole", "RECEIVER", (1.0, 0.06, 0.62, 1.0))
     markers = []
     offsets = ((-700, 0, 80), (-450, -450, 80), (-450, 450, 80), (0, -700, 80),
                (250, 550, 80), (500, 750, 80), (750, 550, 80), (700, -200, 80))
@@ -372,6 +421,7 @@ def main(seed=SEED):
         "target_point": load_native_class("/Script/Engine.TargetPoint"),
         "friction": load_native_class("/Script/Vector.VectorLowFrictionZone"),
         "redirector": load_native_class("/Script/Vector.VectorEnvironmentalRedirector"),
+        "role_marker": load_native_class("/Script/Vector.VectorCircuitRoleMarker"),
         "extraction": load_native_class("/Script/Vector.VectorExtractionZone"),
         "contract_exit": load_native_class("/Script/Vector.VectorContractExit"),
         "director": load_native_class("/Script/Vector.VectorPCGEncounterDirector"),
@@ -392,11 +442,16 @@ def main(seed=SEED):
 
     builders = {
         "SafeStart": lambda x: build_safe_start(x, classes["target_point"], classes["player_start"]),
-        "OpenBowl": lambda x: build_open_bowl(x, classes["target_point"]),
-        "HardLane": lambda x: build_hard_lane(x, classes["target_point"]),
+        "OpenBowl": lambda x: build_open_bowl(
+            x, classes["target_point"], classes["role_marker"]),
+        "HardLane": lambda x: build_hard_lane(
+            x, classes["target_point"], classes["role_marker"]),
         "HeightShelf": lambda x: build_height_shelf(
-            x, classes["target_point"], classes["redirector"]),
-        "SlickCross": lambda x: build_slick_cross(x, classes["target_point"], classes["friction"]),
+            x, classes["target_point"], classes["redirector"],
+            classes["role_marker"]),
+        "SlickCross": lambda x: build_slick_cross(
+            x, classes["target_point"], classes["friction"],
+            classes["role_marker"]),
         "BossRing": lambda x: build_boss_ring(
             x, classes["target_point"], classes["friction"]),
         "Extraction": lambda x: build_extraction(
