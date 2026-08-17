@@ -99,7 +99,7 @@ FString LexToOfferDescription(const EVectorRunModuleType Type)
 	switch (Type)
 	{
 	case EVectorRunModuleType::MomentumRecycler:
-		return TEXT("RECYCLER - REFUND FAST VECTOR SHOTS");
+		return TEXT("RECYCLER - REFUND SHOTS ON FAST TARGETS");
 	case EVectorRunModuleType::TwinVector:
 		return TEXT("TWIN VECTOR - RELAY 45% TO A SECOND TARGET");
 	case EVectorRunModuleType::LateralCutter:

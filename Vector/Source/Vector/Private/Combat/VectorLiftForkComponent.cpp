@@ -784,6 +784,12 @@ bool UVectorLiftForkComponent::TryActivateDirectedSlam(
 	{
 		Dummy->TriggerLiftForkPresentation();
 	}
+	if (UVectorRunProgressionComponent* Progression =
+		Owner->FindComponentByClass<UVectorRunProgressionComponent>();
+		Progression && Progression->HasRuleModule(EVectorRunModuleType::LiftVectorCoupler))
+	{
+		Progression->NotifyRuleModuleTriggered(EVectorRunModuleType::LiftVectorCoupler);
+	}
 	DrawDebugSphere(World, Solution.RequestedSurfacePoint, 42.0f, 16,
 		AutomaticClusterCount >= 0 ? FColor::Orange : FColor::Cyan,
 		false, 0.8f, 0, 4.0f);

@@ -21,6 +21,8 @@ void UVectorRunProgressionComponent::TickComponent(
 	FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	RuleModuleNoticeSecondsRemaining = FMath::Max(
+		0.0, RuleModuleNoticeSecondsRemaining - FMath::Max(0.0f, DeltaTime));
 	const AVectorGameMode* GameMode = GetWorld()
 		? GetWorld()->GetAuthGameMode<AVectorGameMode>() : nullptr;
 	const UVectorEncounterComponent* Encounter = GameMode ? GameMode->Encounter : nullptr;
@@ -144,12 +146,27 @@ bool UVectorRunProgressionComponent::SelectPendingChoice(const int32 OfferIndex)
 		SelectedRuleModule = PendingRuleModuleOffer[OfferIndex];
 		bRuleModuleOfferPending = false;
 		PendingRuleModuleOffer.Reset();
+		RuleModuleNotice = FString::Printf(TEXT("MODULE INSTALLED: %s"),
+			*LexToString(SelectedRuleModule));
+		RuleModuleNoticeSecondsRemaining = 2.5;
 		UE_LOG(LogVectorProgression, Log,
 			TEXT("Run rule module installed: type=%s check=PASS"),
 			*LexToString(SelectedRuleModule));
 		return true;
 	}
 	return SelectPendingCalibration(OfferIndex);
+}
+
+void UVectorRunProgressionComponent::NotifyRuleModuleTriggered(
+	const EVectorRunModuleType Type)
+{
+	if (Type == EVectorRunModuleType::None || !HasRuleModule(Type))
+	{
+		return;
+	}
+	RuleModuleNotice = FString::Printf(TEXT("MODULE TRIGGERED: %s"),
+		*LexToString(Type));
+	RuleModuleNoticeSecondsRemaining = 1.6;
 }
 
 EVectorCalibrationType UVectorRunProgressionComponent::GetPendingCalibration(

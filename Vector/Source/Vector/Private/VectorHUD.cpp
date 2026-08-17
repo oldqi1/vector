@@ -254,6 +254,18 @@ void AVectorHUD::DrawHUD()
 							GEngine->GetSmallFont(), 0.9f, false);
 					}
 				}
+				if (Progression->HasRuleModuleNotice())
+				{
+					const float NoticeWidth = 520.0f;
+					const float NoticeX = (Canvas->ClipX - NoticeWidth) * 0.5f;
+					const float NoticeY = Canvas->ClipY * 0.14f;
+					DrawRect(FLinearColor(0.02f, 0.06f, 0.08f, 0.86f),
+						NoticeX, NoticeY, NoticeWidth, 42.0f);
+					DrawText(Progression->GetRuleModuleNotice(),
+						FLinearColor(0.15f, 0.95f, 1.0f),
+						NoticeX + 55.0f, NoticeY + 12.0f,
+						GEngine->GetSmallFont(), 0.82f, false);
+				}
 			}
 			if (const UVectorActionLockComponent* Lock =
 				PlayerPawn->FindComponentByClass<UVectorActionLockComponent>(); Lock && Lock->IsLocked())
@@ -375,6 +387,21 @@ void AVectorHUD::DrawHUD()
 				FLinearColor(0.78f, 0.84f, 0.9f),
 				LegendX, LegendY + 24.0f,
 				GEngine->GetSmallFont(), 0.65f, false);
+			if (bInSafeStart)
+			{
+				const float CardWidth = 760.0f;
+				const float CardX = (Canvas->ClipX - CardWidth) * 0.5f;
+				const float CardY = Canvas->ClipY * 0.16f;
+				DrawRect(FLinearColor(0.01f, 0.025f, 0.04f, 0.84f),
+					CardX, CardY, CardWidth, 76.0f);
+				DrawText(TEXT("TOOL SENTENCE"), FLinearColor(0.15f, 0.95f, 1.0f),
+					CardX + 300.0f, CardY + 12.0f,
+					GEngine->GetMediumFont(), 0.82f, false);
+				DrawText(
+					TEXT("[1] INJECT VECTOR   [2] GUIDE   [3/4] CHANGE RULES   [5] CHANGE PLANE"),
+					FLinearColor::White, CardX + 55.0f, CardY + 46.0f,
+					GEngine->GetSmallFont(), 0.76f, false);
+			}
 			break;
 		}
 

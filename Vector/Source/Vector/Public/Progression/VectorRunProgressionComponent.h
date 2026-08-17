@@ -31,6 +31,9 @@ public:
 	FString GetPendingChoiceLabel(int32 OfferIndex) const;
 	bool HasRuleModule(EVectorRunModuleType Type) const { return SelectedRuleModule == Type; }
 	EVectorRunModuleType GetSelectedRuleModule() const { return SelectedRuleModule; }
+	void NotifyRuleModuleTriggered(EVectorRunModuleType Type);
+	bool HasRuleModuleNotice() const { return RuleModuleNoticeSecondsRemaining > 0.0; }
+	const FString& GetRuleModuleNotice() const { return RuleModuleNotice; }
 
 	const FVectorRunCalibrationState& GetCalibrationState() const { return CalibrationState; }
 	double GetRangeMultiplier() const { return CalibrationState.GetRangeMultiplier(); }
@@ -62,4 +65,6 @@ private:
 	bool bSawActiveEnemiesSinceOffer = false;
 	bool bOfferPending = false;
 	bool bRuleModuleOfferPending = false;
+	FString RuleModuleNotice;
+	double RuleModuleNoticeSecondsRemaining = 0.0;
 };

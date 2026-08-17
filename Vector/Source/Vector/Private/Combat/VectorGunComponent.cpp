@@ -340,7 +340,7 @@ bool UVectorGunComponent::Fire()
 	const double InjectedSpeed = GetEffectiveImpulseBudget()
 		/ FMath::Max(UE_SMALL_NUMBER, Mass)
 		* (bLiftForkCombo ? FMath::Max(1.0, LiftForkComboImpulseMultiplier) : 1.0);
-	const UVectorRunProgressionComponent* Progression = FindProgression();
+	UVectorRunProgressionComponent* Progression = FindProgression();
 	const bool bLiftVectorCoupler = bAirborneTarget && Progression
 		&& Progression->HasRuleModule(EVectorRunModuleType::LiftVectorCoupler);
 	const double PreservedSourceSpeed = bLiftVectorCoupler
@@ -383,6 +383,7 @@ bool UVectorGunComponent::Fire()
 		&& TargetVelocity.Size2D() >= MomentumRecyclerThresholdCmPerSecond)
 	{
 		CurrentCells = FMath::Min(GetMaximumCells(), CurrentCells + 1);
+		Progression->NotifyRuleModuleTriggered(EVectorRunModuleType::MomentumRecycler);
 		UE_LOG(LogVectorGun, Log,
 			TEXT("Vector module triggered: type=MOMENTUM_RECYCLER target=%s priorSpeed=%.0f refunded=1 cells=%d/%d check=PASS"),
 			*Target->GetName(), TargetVelocity.Size2D(), CurrentCells, GetMaximumCells());
@@ -406,6 +407,10 @@ bool UVectorGunComponent::Fire()
 			const bool bRelayQueued = RelayTarget
 				->FindComponentByClass<UVectorCharacterMovementComponent>()
 				->QueueDirectionalVelocityOverride(Direction, RelaySpeed);
+			if (bRelayQueued)
+			{
+				Progression->NotifyRuleModuleTriggered(EVectorRunModuleType::TwinVector);
+			}
 			DrawDebugLine(World, Target->GetActorLocation(), RelayTarget->GetActorLocation(),
 				FColor::Purple, false, 0.35f, 0, 5.0f);
 			UE_LOG(LogVectorGun, Log,
@@ -423,6 +428,10 @@ bool UVectorGunComponent::Fire()
 		{
 			const FVectorAnchorStructureResult Result = Anchors->ApplyCollisionEvent(
 				Direction, TargetSpeed, Owner);
+			if (Result.bAccepted)
+			{
+				Progression->NotifyRuleModuleTriggered(EVectorRunModuleType::LateralCutter);
+			}
 			UE_LOG(LogVectorGun, Log,
 				TEXT("Vector module triggered: type=LATERAL_CUTTER target=%s speed=%.0f broke=%s groups=%d/2 reason=%s check=%s"),
 				*Target->GetName(), TargetSpeed,
@@ -432,6 +441,7 @@ bool UVectorGunComponent::Fire()
 	}
 	else if (bLiftVectorCoupler)
 	{
+		Progression->NotifyRuleModuleTriggered(EVectorRunModuleType::LiftVectorCoupler);
 		UE_LOG(LogVectorGun, Log,
 			TEXT("Vector module triggered: type=LIFT_VECTOR_COUPLER target=%s airborne=YES prior3DSpeed=%.0f retainedSpeed=%.0f outputSpeed=%.0f energyGrant=%s check=PASS"),
 			*Target->GetName(), TargetVelocity.Size(), PreservedRedirectSpeed,
