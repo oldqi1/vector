@@ -163,10 +163,10 @@ void AVectorPhysicsBoss::AdvanceRam(const double DeltaSeconds)
 	}
 	if (RamPhase == ERamPhase::SlamAirborne)
 	{
-		const UCharacterMovementComponent* CharacterMovement = GetCharacterMovement();
+		const UCharacterMovementComponent* BossMovement = GetCharacterMovement();
 		const bool bHasLeftGround = RamPhaseSecondsRemaining
 			< FMath::Max(0.1, SlamMaximumAirborneSeconds) - 0.1;
-		if (bHasLeftGround && CharacterMovement && CharacterMovement->IsMovingOnGround())
+		if (bHasLeftGround && BossMovement && BossMovement->IsMovingOnGround())
 		{
 			RamPhase = ERamPhase::Recovery;
 			RamPhaseSecondsRemaining = BossState.GetRecoverySeconds();
