@@ -87,6 +87,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|PCG|Encounter")
 	bool bRequireFormalRouteConfiguration = true;
 
+	/** Fast local void cleanup; generated route floor is near Z=0 while world KillZ may be far below. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|PCG|Encounter", meta = (Units = "cm"))
+	double EnemyVoidRecoveryFloorWorldZ = -300.0;
+
 private:
 	UFUNCTION()
 	void HandleEncounterProgress(int32 RemainingEnemies, int32 TotalEnemies);

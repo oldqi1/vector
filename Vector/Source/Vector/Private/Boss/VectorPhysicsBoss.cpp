@@ -323,12 +323,8 @@ void AVectorPhysicsBoss::LaunchSlam()
 	if (UVectorCharacterMovementComponent* Movement =
 		FindComponentByClass<UVectorCharacterMovementComponent>())
 	{
-		bQueued = Movement->QueueDirectionalVelocityOverride(
+		bQueued = Movement->QueueDirectionalAirborneVelocityOverride(
 			FVector::UpVector, SlamLaunchSpeedCmPerSecond);
-		if (bQueued)
-		{
-			Movement->SetMovementMode(MOVE_Falling);
-		}
 	}
 	RamPhase = bQueued ? ERamPhase::SlamAirborne : ERamPhase::Recovery;
 	RamPhaseSecondsRemaining = bQueued
@@ -337,7 +333,7 @@ void AVectorPhysicsBoss::LaunchSlam()
 	UE_LOG(LogVectorBoss, Log,
 		TEXT("Boss slam launch: actor=%s queued=%s verticalSpeed=%.0f mode=%s"),
 		*GetName(), bQueued ? TEXT("OK") : TEXT("REJECTED"),
-		SlamLaunchSpeedCmPerSecond, bQueued ? TEXT("Falling") : TEXT("Recovery"));
+		SlamLaunchSpeedCmPerSecond, bQueued ? TEXT("PendingLaunch") : TEXT("Recovery"));
 }
 
 void AVectorPhysicsBoss::BeginNextAttack()
@@ -421,10 +417,9 @@ void AVectorPhysicsBoss::ReleaseAerialBurst()
 			AerialBurstVerticalBaseSpeedCmPerSecond, Mass);
 		const FVector LaunchVelocity =
 			OutwardDirection * HorizontalSpeed + FVector::UpVector * VerticalSpeed;
-		const bool bQueued = Movement->QueueWorldVelocityOverride(LaunchVelocity);
+		const bool bQueued = Movement->QueueAirborneWorldVelocityOverride(LaunchVelocity);
 		if (bQueued)
 		{
-			Movement->SetMovementMode(MOVE_Falling);
 			++AffectedCount;
 		}
 		UE_LOG(LogVectorBoss, Log,
@@ -484,11 +479,8 @@ void AVectorPhysicsBoss::LaunchAmmoTarget()
 	}
 	UVectorCharacterMovementComponent* Movement =
 		AmmoTarget->FindComponentByClass<UVectorCharacterMovementComponent>();
-	const bool bQueued = Movement && Movement->QueueWorldVelocityOverride(LaunchVelocity);
-	if (bQueued)
-	{
-		Movement->SetMovementMode(MOVE_Falling);
-	}
+	const bool bQueued = Movement
+		&& Movement->QueueAirborneWorldVelocityOverride(LaunchVelocity);
 	const FVector PredictedLanding = FVectorImpactMath::SampleBallisticPosition(
 		AmmoTarget->GetActorLocation(), LaunchVelocity,
 		Movement ? Movement->GetGravityZ() : -980.0,

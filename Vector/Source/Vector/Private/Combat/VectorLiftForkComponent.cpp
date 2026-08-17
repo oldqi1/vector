@@ -100,11 +100,16 @@ void UVectorLiftForkComponent::ActivateFork()
 	const double AppliedStabilityDamage = Stability->ReceiveImpactHit(
 		StabilityDamage, Stability->GetMassClass(), EVectorImpactType::Ground);
 	const double Mass = Stability->GetEffectivePhysicalMass();
-	const double VerticalSpeed = FVectorImpactMath::ComputeMassAdjustedSpeed(
+	const double MassAdjustedVerticalSpeed = FVectorImpactMath::ComputeMassAdjustedSpeed(
 		VerticalImpulseBaseSpeedCmPerSecond, Mass);
-	// Queue first so any movement-mode transition observes the target as impulse-driven
-	// and cannot clear it through an AI/path-following stop request.
-	const bool bQueued = Movement->QueueDirectionalVelocityOverride(FVector::UpVector, VerticalSpeed);
+	const double VerticalSpeed = MassAdjustedVerticalSpeed > 0.0
+		? FMath::Max(MassAdjustedVerticalSpeed, MinimumReadableVerticalSpeedCmPerSecond)
+		: 0.0;
+	// Use CharacterMovement's canonical pending launch. It consumes velocity and
+	// enters Falling in one engine step; the generic CalcVelocity override can be
+	// flattened by a ground/air transition even when its queue log says success.
+	const bool bQueued = Movement->QueueDirectionalAirborneVelocityOverride(
+		FVector::UpVector, VerticalSpeed);
 	if (!bQueued)
 	{
 		Timeline.Reset();
@@ -114,8 +119,6 @@ void UVectorLiftForkComponent::ActivateFork()
 			*Target->GetName(), VerticalSpeed);
 		return;
 	}
-	// Walking projects Z velocity onto the floor; enter Falling after the queue is armed.
-	Movement->SetMovementMode(MOVE_Falling);
 	if (AVectorTestDummy* Dummy = Cast<AVectorTestDummy>(Target))
 	{
 		Dummy->TriggerLiftForkPresentation();
@@ -139,8 +142,8 @@ void UVectorLiftForkComponent::ActivateFork()
 			8.0f);
 	}
 	UE_LOG(LogVectorLiftFork, Log,
-		TEXT("Lift fork hit: target=%s mass=%.2f verticalSpeed=%.0f stabilityDamage=%.1f queued=%s aimSource=%s mode=%s"),
-		*Target->GetName(), Mass, VerticalSpeed, AppliedStabilityDamage,
+		TEXT("Lift fork hit: target=%s mass=%.2f rawVerticalSpeed=%.0f appliedVerticalSpeed=%.0f stabilityDamage=%.1f queued=%s aimSource=%s currentMode=%s awaiting=PendingLaunch"),
+		*Target->GetName(), Mass, MassAdjustedVerticalSpeed, VerticalSpeed, AppliedStabilityDamage,
 		TEXT("OK"), bUsedCursor ? TEXT("mouse") : TEXT("fallback"),
 		*Movement->GetMovementName());
 }

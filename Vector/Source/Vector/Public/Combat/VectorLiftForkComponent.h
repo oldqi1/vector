@@ -28,6 +28,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|LiftFork", meta = (ClampMin = "0.0", Units = "cm/s"))
 	double VerticalImpulseBaseSpeedCmPerSecond = 1900.0;
 
+	/** Heavy targets still visibly leave the ground, but remain below the 600cm/s shock threshold. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|LiftFork", meta = (ClampMin = "0.0", Units = "cm/s"))
+	double MinimumReadableVerticalSpeedCmPerSecond = 520.0;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|LiftFork", meta = (ClampMin = "0.0"))
 	double StabilityDamage = 20.0;
 

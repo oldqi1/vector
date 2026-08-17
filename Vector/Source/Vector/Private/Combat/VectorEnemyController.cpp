@@ -10,6 +10,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Gameplay/VectorCharacterMovementComponent.h"
+#include "Impact/VectorImpactMath.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Stability/VectorStabilityComponent.h"
 
@@ -23,6 +24,12 @@ namespace
 	constexpr double ChargeSpeedCmPerSecond = 1600.0;
 	constexpr double ChargeTriggerRangeCm = 900.0;
 	constexpr double MoveAcceptanceRadiusCm = 120.0;
+	constexpr double DropAttackMinimumHeightCm = 180.0;
+	constexpr double DropAttackMaximumPlanarRangeCm = 1300.0;
+	constexpr double DropAttackBaseHorizontalSpeedCmPerSecond = 3000.0;
+	constexpr double DropAttackVerticalSpeedCmPerSecond = 220.0;
+	constexpr double DropAttackWarmupSeconds = 0.65;
+	constexpr double DropAttackCooldownSeconds = 4.0;
 }
 
 AVectorEnemyController::AVectorEnemyController()
@@ -58,6 +65,52 @@ void AVectorEnemyController::Tick(const float DeltaSeconds)
 	}
 
 	APawn* PlayerPawn = FindPlayerPawn();
+	DropAttackCooldownRemainingSeconds = FMath::Max(
+		0.0, DropAttackCooldownRemainingSeconds - DeltaSeconds);
+	PathFailureLogCooldownRemainingSeconds = FMath::Max(
+		0.0, PathFailureLogCooldownRemainingSeconds - DeltaSeconds);
+
+	if (bPreparingDropAttack)
+	{
+		if (ControlledEnemy->ShouldPauseAI())
+		{
+			bPreparingDropAttack = false;
+			ControlledEnemy->SetAttackWarningPresentation(false);
+			DropAttackCooldownRemainingSeconds = 1.0;
+			UE_LOG(LogVectorEnemyAI, Log,
+				TEXT("Enemy drop telegraph interrupted: enemy=%s"),
+				*ControlledEnemy->GetName());
+			return;
+		}
+		PausePathFollowing();
+		DropAttackWarmupRemainingSeconds -= DeltaSeconds;
+		if (DropAttackWarmupRemainingSeconds > 0.0)
+		{
+			return;
+		}
+
+		UVectorCharacterMovementComponent* Movement =
+			ControlledEnemy->FindComponentByClass<UVectorCharacterMovementComponent>();
+		const UVectorStabilityComponent* Stability =
+			ControlledEnemy->FindComponentByClass<UVectorStabilityComponent>();
+		const double Mass = Stability ? Stability->GetEffectivePhysicalMass() : 2.5;
+		const double HorizontalSpeed = FMath::Clamp(
+			FVectorImpactMath::ComputeMassAdjustedSpeed(
+				DropAttackBaseHorizontalSpeedCmPerSecond, Mass),
+			600.0, 1000.0);
+		const FVector LaunchVelocity = LockedDropAttackDirection * HorizontalSpeed
+			+ FVector::UpVector * DropAttackVerticalSpeedCmPerSecond;
+		const bool bQueued = Movement
+			&& Movement->QueueAirborneWorldVelocityOverride(LaunchVelocity);
+		bPreparingDropAttack = false;
+		ControlledEnemy->SetAttackWarningPresentation(false);
+		DropAttackCooldownRemainingSeconds = DropAttackCooldownSeconds;
+		UE_LOG(LogVectorEnemyAI, Log,
+			TEXT("Enemy drop attack: enemy=%s mass=%.2f velocity=%s queued=%s"),
+			*ControlledEnemy->GetName(), Mass, *LaunchVelocity.ToCompactString(),
+			bQueued ? TEXT("OK") : TEXT("REJECTED"));
+		return;
+	}
 
 	// 冲锋流程推进（Charger 型）。
 	if (bCharging)
@@ -133,9 +186,38 @@ void AVectorEnemyController::Tick(const float DeltaSeconds)
 		return;
 	}
 
+	const FVector ToPlayer = PlayerPawn->GetActorLocation() - ControlledEnemy->GetActorLocation();
+	if (ControlledEnemy->Archetype != EVectorEnemyArchetype::ChargerRammer
+		&& DropAttackCooldownRemainingSeconds <= 0.0
+		&& ToPlayer.Z <= -DropAttackMinimumHeightCm
+		&& ToPlayer.SizeSquared2D() <= FMath::Square(DropAttackMaximumPlanarRangeCm))
+	{
+		bPreparingDropAttack = true;
+		DropAttackWarmupRemainingSeconds = DropAttackWarmupSeconds;
+		LockedDropAttackDirection = ToPlayer.GetSafeNormal2D();
+		ControlledEnemy->SetAttackWarningPresentation(true);
+		PausePathFollowing();
+		UE_LOG(LogVectorEnemyAI, Log,
+			TEXT("Enemy drop telegraph: enemy=%s height=%.0f planar=%.0f duration=%.2fs direction=%s"),
+			*ControlledEnemy->GetName(), -ToPlayer.Z, ToPlayer.Size2D(),
+			DropAttackWarmupSeconds, *LockedDropAttackDirection.ToCompactString());
+		return;
+	}
+
 	// 恢复被暂停的路径跟随，再继续追击。
 	ResumePathFollowingIfPaused();
-	MoveToActor(PlayerPawn, MoveAcceptanceRadiusCm);
+	const EPathFollowingRequestResult::Type PathRequest =
+		MoveToActor(PlayerPawn, MoveAcceptanceRadiusCm);
+	if (PathRequest == EPathFollowingRequestResult::Failed
+		&& PathFailureLogCooldownRemainingSeconds <= 0.0)
+	{
+		PathFailureLogCooldownRemainingSeconds = 1.0;
+		UE_LOG(LogVectorEnemyAI, Warning,
+			TEXT("Enemy path request failed: enemy=%s from=%s player=%s deltaZ=%.0f"),
+			*ControlledEnemy->GetName(),
+			*ControlledEnemy->GetActorLocation().ToCompactString(),
+			*PlayerPawn->GetActorLocation().ToCompactString(), ToPlayer.Z);
+	}
 }
 
 void AVectorEnemyController::TriggerCharge()

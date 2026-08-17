@@ -41,6 +41,7 @@ void UVectorCharacterMovementComponent::ClearQueuedWorldVelocityChanges()
 {
 	PendingWorldVelocityOverride = FVector::ZeroVector;
 	bHasPendingWorldVelocityOverride = false;
+	PendingLaunchVelocity = FVector::ZeroVector;
 	AppliedWorldVelocityChangeThisStep = FVector::ZeroVector;
 	ActiveVelocityChangeDirection = FVector::ZeroVector;
 	bUseVelocityChangeSubsteps = false;
@@ -58,6 +59,9 @@ bool UVectorCharacterMovementComponent::QueueWorldVelocityOverride(
 
 	PendingWorldVelocityOverride = WorldVelocity;
 	bHasPendingWorldVelocityOverride = true;
+	// Last writer wins across both transport mechanisms. A collision/hammer
+	// resolved later in the same frame must be able to replace an earlier launch.
+	PendingLaunchVelocity = FVector::ZeroVector;
 	bIsImpulseDriven = true;
 	return true;
 }
@@ -83,6 +87,60 @@ bool UVectorCharacterMovementComponent::QueueDirectionalVelocityOverride(
 	return QueueWorldVelocityOverride(PerpendicularVelocity + Direction * TargetSpeedCmPerSecond);
 }
 
+bool UVectorCharacterMovementComponent::QueueAirborneWorldVelocityOverride(
+	const FVector& WorldVelocity)
+{
+	if (!VectorCharacterMovement::IsFiniteVector(WorldVelocity)
+		|| WorldVelocity.IsNearlyZero())
+	{
+		return false;
+	}
+
+	// The standard pending launch is the engine-supported bridge between a
+	// grounded Character and Falling. Do not also leave a CalcVelocity override
+	// armed: two pending writers would make the result tick-order dependent.
+	PendingWorldVelocityOverride = FVector::ZeroVector;
+	bHasPendingWorldVelocityOverride = false;
+	PendingLaunchVelocity = FVector::ZeroVector;
+	Launch(WorldVelocity);
+	if (!PendingLaunchVelocity.Equals(WorldVelocity, 1.e-3))
+	{
+		UE_LOG(LogVectorMovement, Warning,
+			TEXT("Airborne launch REJECTED by CharacterMovement: owner=%s target=%s mode=%s active=%d valid=%d"),
+			*GetNameSafe(GetOwner()), *WorldVelocity.ToCompactString(), *GetMovementName(),
+			IsActive() ? 1 : 0, HasValidData() ? 1 : 0);
+		return false;
+	}
+	bIsImpulseDriven = true;
+	ActiveVelocityChangeDirection = WorldVelocity.GetSafeNormal();
+	bUseVelocityChangeSubsteps = !ActiveVelocityChangeDirection.IsNearlyZero();
+	UE_LOG(LogVectorMovement, Log,
+		TEXT("Airborne launch queued: owner=%s target=%s currentMode=%s"),
+		*GetNameSafe(GetOwner()), *WorldVelocity.ToCompactString(), *GetMovementName());
+	return true;
+}
+
+bool UVectorCharacterMovementComponent::QueueDirectionalAirborneVelocityOverride(
+	const FVector& WorldDirection,
+	const double TargetSpeedCmPerSecond)
+{
+	if (!VectorCharacterMovement::IsFiniteVector(WorldDirection)
+		|| !FMath::IsFinite(TargetSpeedCmPerSecond))
+	{
+		return false;
+	}
+	const FVector Direction = WorldDirection.GetSafeNormal();
+	if (Direction.IsNearlyZero())
+	{
+		return false;
+	}
+	const FVector BaseVelocity = GetEffectiveVelocityForPendingStep();
+	const double AlongDirection = FVector::DotProduct(BaseVelocity, Direction);
+	const FVector PerpendicularVelocity = BaseVelocity - Direction * AlongDirection;
+	return QueueAirborneWorldVelocityOverride(
+		PerpendicularVelocity + Direction * TargetSpeedCmPerSecond);
+}
+
 void UVectorCharacterMovementComponent::BeginMomentumCarry(const double DurationSeconds)
 {
 	if (!FMath::IsFinite(DurationSeconds) || DurationSeconds <= 0.0)
@@ -100,6 +158,10 @@ void UVectorCharacterMovementComponent::BeginMomentumCarry(const double Duration
 
 FVector UVectorCharacterMovementComponent::GetEffectiveVelocityForPendingStep() const
 {
+	if (!PendingLaunchVelocity.IsNearlyZero())
+	{
+		return PendingLaunchVelocity;
+	}
 	return bHasPendingWorldVelocityOverride ? PendingWorldVelocityOverride : Velocity;
 }
 
@@ -240,6 +302,26 @@ void UVectorCharacterMovementComponent::OnMovementModeChanged(
 			ImpactComponent->OnLandedWithImpact(PreLandingVerticalSpeed);
 		}
 	}
+}
+
+bool UVectorCharacterMovementComponent::HandlePendingLaunch()
+{
+	const FVector RequestedLaunchVelocity = PendingLaunchVelocity;
+	const FVector BeforeLaunchVelocity = Velocity;
+	const bool bLaunched = Super::HandlePendingLaunch();
+	if (bLaunched)
+	{
+		AppliedWorldVelocityChangeThisStep = Velocity - BeforeLaunchVelocity;
+		bIsImpulseDriven = true;
+		UE_LOG(LogVectorMovement, Log,
+			TEXT("Airborne launch consumed: owner=%s before=%s target=%s actual=%s mode=%s check=%s"),
+			*GetNameSafe(GetOwner()), *BeforeLaunchVelocity.ToCompactString(),
+			*RequestedLaunchVelocity.ToCompactString(), *Velocity.ToCompactString(),
+			*GetMovementName(),
+			Velocity.Equals(RequestedLaunchVelocity, 1.0) && IsFalling()
+				? TEXT("PASS") : TEXT("FAIL"));
+	}
+	return bLaunched;
 }
 
 void UVectorCharacterMovementComponent::PhysWalking(

@@ -7,14 +7,14 @@
 #include "VectorCharacterMovementComponent.generated.h"
 
 /**
- * 冲量荒原平面世界移动组件：标准 CharacterMovement + 受控冲量队列。
+ * 冲量荒原三维角色移动组件：标准 CharacterMovement + 受控冲量/空中发射队列。
  *
- * 移植自 MorphorbitCharacterMovementComponent（受控速度队列平面化，
+ * 移植自 MorphorbitCharacterMovementComponent（删除径向重力世界规则，
  * 删除径向重力/引力井/逃逸速度相关逻辑）。核心能力：装备/碰撞系统可向拥有者排队
  * 一次世界空间目标速度，在下一帧正常 CalcVelocity 后覆盖；同一帧多次裁决采用
  * “后一次基于前一次结果继续解算、最后结果覆盖”，禁止把多个目标速度相加。
- * 随后一帧即失效——不持续施力、不改摩擦/移动模式；高速冲量使用 1/120 s
- * 有限外层子步避免穿墙。
+ * 随后一帧即失效——不持续施力；标准 Launch 专门负责进入 Falling，
+ * 高速地面冲量使用 1/120 s 有限外层子步避免穿墙。
  */
 UCLASS()
 class VECTOR_API UVectorCharacterMovementComponent : public UCharacterMovementComponent
@@ -37,6 +37,17 @@ public:
 	 * 锤击、扑击和冲锋使用此入口；碰撞解算使用完整速度覆盖入口。
 	 */
 	bool QueueDirectionalVelocityOverride(const FVector& WorldDirection, double TargetSpeedCmPerSecond);
+
+	/**
+	 * Queue an actual CharacterMovement launch. Unlike the generic CalcVelocity
+	 * override, UE consumes this at the end of movement and enters Falling in
+	 * the same canonical step, so vertical tools cannot be flattened by a
+	 * Walking/Falling timing transition.
+	 */
+	bool QueueAirborneWorldVelocityOverride(const FVector& WorldVelocity);
+	bool QueueDirectionalAirborneVelocityOverride(
+		const FVector& WorldDirection,
+		double TargetSpeedCmPerSecond);
 
 	/** Preserve traversal exit velocity with temporarily reduced ground braking. */
 	void BeginMomentumCarry(double DurationSeconds);
@@ -85,6 +96,7 @@ protected:
 		float TimeSlice,
 		const FVector& MoveDelta) override;
 	virtual void OnMovementModeChanged(EMovementMode PreviousMovementMode, uint8 PreviousCustomMode) override;
+	virtual bool HandlePendingLaunch() override;
 
 	/**
 	 * AI 移动请求入口（PathFollowing 每帧调用）。

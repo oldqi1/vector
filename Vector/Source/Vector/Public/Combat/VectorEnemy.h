@@ -39,6 +39,10 @@ class VECTOR_API AVectorEnemy : public AVectorTestDummy
 
 public:
 	AVectorEnemy(const FObjectInitializer& ObjectInitializer);
+	virtual void Tick(float DeltaSeconds) override;
+
+	/** PCG rooms use a local safety plane instead of waiting for the world's distant KillZ. */
+	void ConfigureEncounterVoidRecovery(double FloorWorldZ, const FVector& DropRecoveryLocation);
 
 	/**
 	 * Arms a lethal hammer hit to launch this enemy as a short-lived projectile
@@ -97,6 +101,7 @@ protected:
 private:
 	virtual void Destroyed() override;
 
+	void TriggerVoidRecovery(const TCHAR* Reason);
 	void HandleLethalLaunchBodyImpact(AActor* OtherActor);
 	void HandleLethalLaunchSurfaceImpact(double ImpactSpeedCmPerSecond);
 	void ScheduleLethalLaunchDespawn(const TCHAR* Reason);
@@ -106,4 +111,8 @@ private:
 	bool bLethalLaunchDeathActive = false;
 	bool bLethalLaunchImpactSeen = false;
 	bool bOrganDropSpawned = false;
+	bool bEncounterVoidRecoveryEnabled = false;
+	bool bVoidRecoveryTriggered = false;
+	double EncounterVoidRecoveryFloorZ = 0.0;
+	FVector EncounterVoidDropLocation = FVector::ZeroVector;
 };

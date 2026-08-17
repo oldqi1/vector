@@ -10,6 +10,7 @@
 #include "Environment/VectorLowFrictionZone.h"
 #include "Hunt/VectorEncounterComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "NavigationSystem.h"
 #include "VectorGameMode.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVectorPCGEncounter, Log, All);
@@ -379,8 +380,25 @@ AVectorEnemy* AVectorPCGEncounterDirector::SpawnEnemyAt(
 	{
 		return nullptr;
 	}
+	FNavLocation ProjectedLocation;
+	UNavigationSystemV1* NavigationSystem =
+		FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	const bool bProjectedToNavigation = NavigationSystem
+		&& NavigationSystem->ProjectPointToNavigation(
+			SpawnPoint->GetActorLocation(), ProjectedLocation,
+			FVector(160.0, 160.0, 220.0));
+	const FVector ResolvedSpawnLocation = bProjectedToNavigation
+		? ProjectedLocation.Location + FVector(0.0, 0.0, 100.0)
+		: SpawnPoint->GetActorLocation() + FVector(0.0, 0.0, 80.0);
+	if (!bProjectedToNavigation)
+	{
+		UE_LOG(LogVectorPCGEncounter, Warning,
+			TEXT("PCG enemy nav projection failed: moduleIndex=%d slot=%d marker=%s queryExtent=(160,160,220)"),
+			WaveIndex + 1, SpawnIndex,
+			*SpawnPoint->GetActorLocation().ToCompactString());
+	}
 	const FTransform SpawnTransform(SpawnPoint->GetActorRotation(),
-		SpawnPoint->GetActorLocation() + FVector(0.0, 0.0, 80.0));
+		ResolvedSpawnLocation);
 	AVectorEnemy* Enemy = GetWorld()->SpawnActorDeferred<AVectorEnemy>(
 		EnemyClass, SpawnTransform, this, nullptr,
 		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
@@ -396,9 +414,13 @@ AVectorEnemy* AVectorPCGEncounterDirector::SpawnEnemyAt(
 		? SelectModuleArchetype(ModuleName, SpawnIndex)
 		: EVectorEnemyArchetype::LightHoppper;
 	UGameplayStatics::FinishSpawningActor(Enemy, SpawnTransform);
+	Enemy->ConfigureEncounterVoidRecovery(
+		EnemyVoidRecoveryFloorWorldZ,
+		ResolvedSpawnLocation);
 	UE_LOG(LogVectorPCGEncounter, Log,
-		TEXT("PCG enemy slot: module=%s wave=%d slot=%d z=%.0f archetype=%s"),
+		TEXT("PCG enemy slot: module=%s wave=%d slot=%d markerZ=%.0f spawnZ=%.0f nav=%s archetype=%s"),
 		*ModuleName, WaveIndex + 1, SpawnIndex, SpawnPoint->GetActorLocation().Z,
+		ResolvedSpawnLocation.Z, bProjectedToNavigation ? TEXT("PASS") : TEXT("FAIL"),
 		ArchetypeToLogText(Enemy->Archetype));
 	return Enemy;
 }

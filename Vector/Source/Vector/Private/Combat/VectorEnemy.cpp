@@ -27,6 +27,29 @@ AVectorEnemy::AVectorEnemy(const FObjectInitializer& ObjectInitializer)
 	OrganPickupClass = AVectorOrganPickup::StaticClass();
 }
 
+void AVectorEnemy::Tick(const float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (bEncounterVoidRecoveryEnabled && !bVoidRecoveryTriggered
+		&& GetActorLocation().Z < EncounterVoidRecoveryFloorZ)
+	{
+		TriggerVoidRecovery(TEXT("encounter safety floor"));
+	}
+}
+
+void AVectorEnemy::ConfigureEncounterVoidRecovery(
+	const double FloorWorldZ,
+	const FVector& DropRecoveryLocation)
+{
+	if (!FMath::IsFinite(FloorWorldZ) || DropRecoveryLocation.ContainsNaN())
+	{
+		return;
+	}
+	bEncounterVoidRecoveryEnabled = true;
+	EncounterVoidRecoveryFloorZ = FloorWorldZ;
+	EncounterVoidDropLocation = DropRecoveryLocation;
+}
+
 void AVectorEnemy::BeginPlay()
 {
 	Super::BeginPlay();
@@ -230,13 +253,37 @@ bool AVectorEnemy::ShouldPauseAI() const
 
 void AVectorEnemy::FellOutOfWorld(const UDamageType& DamageType)
 {
-	if (HealthComponent && !HealthComponent->IsDead())
+	if (!bVoidRecoveryTriggered)
 	{
-		UE_LOG(LogVectorEnemy, Log,
-			TEXT("Enemy fell out of world: enemy=%s location=%s health=%.1f action=LETHAL_DAMAGE"),
-			*GetName(), *GetActorLocation().ToCompactString(), HealthComponent->GetHealth());
-		HealthComponent->ApplyDamage(FMath::Max(1.0, HealthComponent->GetHealth()));
+		TriggerVoidRecovery(TEXT("world KillZ"));
 		return;
 	}
 	Super::FellOutOfWorld(DamageType);
+}
+
+void AVectorEnemy::TriggerVoidRecovery(const TCHAR* Reason)
+{
+	if (bVoidRecoveryTriggered)
+	{
+		return;
+	}
+	bVoidRecoveryTriggered = true;
+	const FVector FallenLocation = GetActorLocation();
+	UE_LOG(LogVectorEnemy, Log,
+		TEXT("Enemy void recovery: enemy=%s reason=%s fallen=%s floorZ=%.0f ledgerAction=LETHAL_DAMAGE"),
+		*GetName(), Reason ? Reason : TEXT("unknown"),
+		*FallenLocation.ToCompactString(), EncounterVoidRecoveryFloorZ);
+
+	if (HealthComponent && !HealthComponent->IsDead())
+	{
+		// Death and its organ drop occur at the authored recovery point so a
+		// successful environmental kill cannot strand progression or loot below the map.
+		if (bEncounterVoidRecoveryEnabled)
+		{
+			SetActorLocation(EncounterVoidDropLocation, false, nullptr, ETeleportType::TeleportPhysics);
+		}
+		HealthComponent->ApplyDamage(FMath::Max(1.0, HealthComponent->GetHealth()));
+		return;
+	}
+	Destroy();
 }

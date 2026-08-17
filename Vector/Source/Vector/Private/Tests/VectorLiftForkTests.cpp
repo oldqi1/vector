@@ -16,6 +16,7 @@ bool FVectorLiftForkMassScalingTest::RunTest(const FString& Parameters)
 	const double LightSpeed = FVectorImpactMath::ComputeMassAdjustedSpeed(BaseLiftSpeed, 1.25);
 	const double MediumSpeed = FVectorImpactMath::ComputeMassAdjustedSpeed(BaseLiftSpeed, 2.5);
 	const double HeavySpeed = FVectorImpactMath::ComputeMassAdjustedSpeed(BaseLiftSpeed, 5.0);
+	const double HeavyAppliedSpeed = FMath::Max(HeavySpeed, 520.0);
 
 	TestEqual(TEXT("Light lift speed"), LightSpeed, 1520.0, 1.e-6);
 	TestEqual(TEXT("Medium lift speed"), MediumSpeed, 760.0, 1.e-6);
@@ -24,6 +25,10 @@ bool FVectorLiftForkMassScalingTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Light and medium can exceed landing-shock threshold"),
 		LightSpeed > 600.0 && MediumSpeed > 600.0);
 	TestTrue(TEXT("Stable heavy needs stagger or another setup for landing shock"), HeavySpeed < 600.0);
+	TestEqual(TEXT("Heavy receives a readable but non-shock lift floor"),
+		HeavyAppliedSpeed, 520.0, 1.e-6);
+	TestTrue(TEXT("Readable floor remains below landing-shock threshold"),
+		HeavyAppliedSpeed < 600.0);
 	TestEqual(TEXT("Invalid mass is rejected"),
 		FVectorImpactMath::ComputeMassAdjustedSpeed(BaseLiftSpeed, 0.0), 0.0, 1.e-6);
 	return true;

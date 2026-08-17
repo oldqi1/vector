@@ -370,7 +370,7 @@ const TArray<FVectorTacticalModuleDefinition>& FVectorTacticalGenerator::GetEnco
 			EVectorPhysicsOpportunity::LongLaunchLane
 			| EVectorPhysicsOpportunity::CrowdReceiver
 			| EVectorPhysicsOpportunity::TetherSwingArc
-			| EVectorPhysicsOpportunity::RecoveryPocket, 10, 2, 260.0),
+			| EVectorPhysicsOpportunity::RecoveryPocket, 10),
 		MakeModule(TEXT("HardLane"), EVectorTacticalModuleType::HardLane,
 			EVectorPhysicsOpportunity::LongLaunchLane
 			| EVectorPhysicsOpportunity::HardWallReceiver
@@ -386,7 +386,7 @@ const TArray<FVectorTacticalModuleDefinition>& FVectorTacticalGenerator::GetEnco
 			EVectorPhysicsOpportunity::CrowdReceiver
 			| EVectorPhysicsOpportunity::TetherSwingArc
 			| EVectorPhysicsOpportunity::LowFrictionPath
-			| EVectorPhysicsOpportunity::RecoveryPocket, 9, 2, 300.0),
+			| EVectorPhysicsOpportunity::RecoveryPocket, 9),
 	};
 	return Catalog;
 }

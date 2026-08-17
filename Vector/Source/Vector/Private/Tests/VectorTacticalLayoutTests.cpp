@@ -50,6 +50,16 @@ bool FVectorTacticalLayoutConstraintsTest::RunTest(const FString& Parameters)
 	for (int32 Seed = -32; Seed <= 32; ++Seed)
 	{
 		const FVectorTacticalLayout Layout = FVectorTacticalGenerator::Generate(Seed);
+		bool bEncounterOwnsHeightRecipe = false;
+		for (const FVectorTacticalModuleDefinition& Module : Layout.Modules)
+		{
+			if (Module.Type != EVectorTacticalModuleType::BossRing
+				&& Module.HasOpportunity(EVectorPhysicsOpportunity::HeightDrop))
+			{
+				bEncounterOwnsHeightRecipe = Module.HeightLayerCount >= 2
+					&& Module.MaximumHeightDifferenceCm >= 150.0;
+			}
+		}
 		TestTrue(FString::Printf(TEXT("Seed %d is valid"), Seed), Layout.bValid);
 		TestTrue(FString::Printf(TEXT("Seed %d supports tether setup"), Seed),
 			Layout.HasOpportunity(EVectorPhysicsOpportunity::TetherSwingArc));
@@ -59,9 +69,16 @@ bool FVectorTacticalLayoutConstraintsTest::RunTest(const FString& Parameters)
 			Layout.GetMaximumHeightLayerCount() >= 2);
 		TestTrue(FString::Printf(TEXT("Seed %d has a meaningful drop"), Seed),
 			Layout.GetMaximumHeightDifferenceCm() >= 150.0);
+		TestTrue(FString::Printf(
+			TEXT("Seed %d gives an encounter—not only the Boss—a vertical recipe"), Seed),
+			bEncounterOwnsHeightRecipe);
 		TestTrue(FString::Printf(TEXT("Seed %d meets score"), Seed),
 			Layout.TacticalScore >= 12.0);
 	}
+	const TArray<FVectorTacticalModuleDefinition>& Catalog =
+		FVectorTacticalGenerator::GetEncounterModuleCatalog();
+	TestEqual(TEXT("OpenBowl stays deliberately flat"), Catalog[0].HeightLayerCount, 1);
+	TestEqual(TEXT("SlickCross stays deliberately flat"), Catalog[3].HeightLayerCount, 1);
 	return true;
 }
 

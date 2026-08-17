@@ -60,4 +60,10 @@ private:
 
 	/** 冲锋方向（预警结束时锁定）。 */
 	FVector ChargeDirection = FVector::ForwardVector;
+
+	double DropAttackCooldownRemainingSeconds = 0.0;
+	double PathFailureLogCooldownRemainingSeconds = 0.0;
+	bool bPreparingDropAttack = false;
+	double DropAttackWarmupRemainingSeconds = 0.0;
+	FVector LockedDropAttackDirection = FVector::ForwardVector;
 };
