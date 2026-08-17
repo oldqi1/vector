@@ -77,12 +77,19 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|TestDummy|Presentation")
 	TObjectPtr<UPointLightComponent> LiftForkLight;
 
+	/** Short tiered collision pulse, independent from attack/lift state lights. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|TestDummy|Presentation")
+	TObjectPtr<UPointLightComponent> ImpactFeedbackLight;
+
 protected:
 	/** 按质量档应用方块颜色与缩放（派生类可在质量档变更后重调）。 */
 	virtual void ApplyMassPresentation();
 
 	/** 按稳定度状态更新失衡表现（失衡白闪 / 倒地躺平 / 恢复直立），每帧调用。 */
 	void UpdateStaggerPresentation();
+	void HandleBodyImpactFeedback(AActor* OtherActor);
+	void HandleSurfaceImpactFeedback(double ClosingSpeedCmPerSecond);
+	void TriggerImpactFeedback(double ImpactSpeedCmPerSecond);
 
 	/** 质量档基础颜色（失衡表现叠加用，恢复时还原）。 */
 	FLinearColor BaseBodyColor = FLinearColor::White;
@@ -100,6 +107,9 @@ protected:
 	bool bLubricatedPresentation = false;
 	bool bBuoyantPresentation = false;
 	double LiftForkFlashSecondsRemaining = 0.0;
+	double ImpactFeedbackSecondsRemaining = 0.0;
+	double ImpactFeedbackDurationSeconds = 0.0;
+	double ImpactFeedbackPeakIntensity = 0.0;
 	double LiftForkTraceSecondsRemaining = 0.0;
 	double LiftForkDiagnosticDelaySecondsRemaining = 0.0;
 	double LiftForkPeakHeightCm = 0.0;

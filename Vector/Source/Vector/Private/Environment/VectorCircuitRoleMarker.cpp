@@ -7,6 +7,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/ConstructorHelpers.h"
 
 AVectorCircuitRoleMarker::AVectorCircuitRoleMarker()
@@ -49,7 +50,6 @@ AVectorCircuitRoleMarker::AVectorCircuitRoleMarker()
 	RoleLight->SetAttenuationRadius(330.0f);
 	RoleLight->SetCastShadows(false);
 
-	RefreshPresentation();
 }
 
 void AVectorCircuitRoleMarker::OnConstruction(const FTransform& Transform)
@@ -78,6 +78,17 @@ void AVectorCircuitRoleMarker::RefreshPresentation()
 	{
 		RoleText->SetText(FText::FromName(RoleLabel));
 		RoleText->SetTextRenderColor(SafeColor.ToFColor(true));
+	}
+	if (GroundGlyph)
+	{
+		if (!GlyphMaterial)
+		{
+			GlyphMaterial = GroundGlyph->CreateAndSetMaterialInstanceDynamic(0);
+		}
+		if (GlyphMaterial)
+		{
+			GlyphMaterial->SetVectorParameterValue(TEXT("Color"), SafeColor);
+		}
 	}
 	if (RoleLight)
 	{

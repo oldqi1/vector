@@ -8,6 +8,7 @@
 
 class AVectorOrganPickup;
 class UDamageType;
+class UPointLightComponent;
 class UStaticMesh;
 class UStaticMeshComponent;
 class UVectorBreakableAnchorComponent;
@@ -114,6 +115,14 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Enemy|Structure|Presentation")
 	TObjectPtr<UStaticMeshComponent> RightAnchorMesh;
 
+	/** A collision-free silhouette cue that remains visible when imported meshes ignore tint. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Enemy|Presentation")
+	TObjectPtr<UStaticMeshComponent> ArchetypeIndicatorMesh;
+
+	/** Persistent low-intensity role color; attack warnings use the separate white pulse. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Enemy|Presentation")
+	TObjectPtr<UPointLightComponent> ArchetypeIndicatorLight;
+
 	/** CC0 prototype silhouettes. Missing assets fall back to the established greybox cube. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Vector|Enemy|Presentation")
 	TSoftObjectPtr<UStaticMesh> LightPrototypeMesh;
@@ -152,6 +161,10 @@ private:
 	void HandleAnchorGroupBroken(EVectorAnchorGroupSide Side, int32 BrokenGroupCount);
 	void UpdateAnchorPresentation();
 	void ApplyPrototypeMeshPresentation();
+	void UpdateArchetypeIndicatorPresentation();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> ArchetypeIndicatorMaterial;
 
 	bool bLethalLaunchArmed = false;
 	bool bLethalLaunchDeathActive = false;
@@ -159,6 +172,7 @@ private:
 	bool bOrganDropSpawned = false;
 	bool bEncounterVoidRecoveryEnabled = false;
 	bool bVoidRecoveryTriggered = false;
+	double StructureBreakPulseSecondsRemaining = 0.0;
 	double EncounterVoidRecoveryFloorZ = 0.0;
 	FVector EncounterVoidDropLocation = FVector::ZeroVector;
 };

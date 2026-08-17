@@ -29,6 +29,9 @@ bool FVectorRunProgressionVerticalGrowthTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("cross-tool module has a readable offer label"),
 		LexToString(EVectorRunModuleType::LiftVectorCoupler),
 		FString(TEXT("LIFT-VECTOR COUPLER")));
+	TestTrue(TEXT("rule module offer explains the changed verb"),
+		LexToOfferDescription(EVectorRunModuleType::LiftVectorCoupler)
+			.Contains(TEXT("AUTO/MANUAL SLAM")));
 	TestTrue(TEXT("The first room clear offers a rule module before raw calibration"),
 		FVectorRunOfferPolicy::ShouldOfferRuleModuleFirst(
 			0, EVectorRunModuleType::None));

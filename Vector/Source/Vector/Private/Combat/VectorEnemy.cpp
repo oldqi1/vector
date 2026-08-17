@@ -12,10 +12,12 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Gameplay/VectorCharacterMovementComponent.h"
 #include "Hunt/VectorOrganPickup.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Stability/VectorStabilityComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVectorEnemy, Log, All);
@@ -52,6 +54,23 @@ AVectorEnemy::AVectorEnemy(const FObjectInitializer& ObjectInitializer)
 		LeftAnchorMesh->SetStaticMesh(BodyMesh->GetStaticMesh());
 		RightAnchorMesh->SetStaticMesh(BodyMesh->GetStaticMesh());
 	}
+
+	ArchetypeIndicatorMesh = CreateDefaultSubobject<UStaticMeshComponent>(
+		TEXT("ArchetypeIndicator"));
+	ArchetypeIndicatorMesh->SetupAttachment(GetCapsuleComponent());
+	ArchetypeIndicatorMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	ArchetypeIndicatorMesh->SetGenerateOverlapEvents(false);
+	ArchetypeIndicatorMesh->SetCanEverAffectNavigation(false);
+	ArchetypeIndicatorMesh->SetCastShadow(false);
+	ArchetypeIndicatorMesh->SetVisibility(false);
+
+	ArchetypeIndicatorLight = CreateDefaultSubobject<UPointLightComponent>(
+		TEXT("ArchetypeIndicatorLight"));
+	ArchetypeIndicatorLight->SetupAttachment(GetCapsuleComponent());
+	ArchetypeIndicatorLight->SetRelativeLocation(FVector(0.0, 0.0, 105.0));
+	ArchetypeIndicatorLight->SetAttenuationRadius(240.0f);
+	ArchetypeIndicatorLight->SetIntensity(0.0f);
+	ArchetypeIndicatorLight->SetCastShadows(false);
 	LightPrototypeMesh = TSoftObjectPtr<UStaticMesh>(FSoftObjectPath(
 		TEXT("/Game/Vector/Art/PrototypeMonsters/Bat/SM_Prototype_Bat.SM_Prototype_Bat")));
 	HeavyPrototypeMesh = TSoftObjectPtr<UStaticMesh>(FSoftObjectPath(
@@ -64,6 +83,23 @@ AVectorEnemy::AVectorEnemy(const FObjectInitializer& ObjectInitializer)
 void AVectorEnemy::Tick(const float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	const double PreviousStructurePulse = StructureBreakPulseSecondsRemaining;
+	StructureBreakPulseSecondsRemaining = FMath::Max(
+		0.0, StructureBreakPulseSecondsRemaining - FMath::Max(0.0f, DeltaSeconds));
+	if (ArchetypeIndicatorLight && StructureBreakPulseSecondsRemaining > 0.0)
+	{
+		const double PulseAlpha = FMath::Clamp(
+			StructureBreakPulseSecondsRemaining / 0.35, 0.0, 1.0);
+		ArchetypeIndicatorLight->SetLightColor(FLinearColor::LerpUsingHSV(
+			FLinearColor(0.72f, 0.12f, 1.0f), FLinearColor::White,
+			static_cast<float>(PulseAlpha)));
+		ArchetypeIndicatorLight->SetIntensity(static_cast<float>(
+			1600.0 + 7600.0 * PulseAlpha));
+	}
+	else if (PreviousStructurePulse > 0.0)
+	{
+		UpdateArchetypeIndicatorPresentation();
+	}
 	if (bEncounterVoidRecoveryEnabled && !bVoidRecoveryTriggered
 		&& GetActorLocation().Z < EncounterVoidRecoveryFloorZ)
 	{
@@ -323,6 +359,7 @@ void AVectorEnemy::ApplyArchetypeConfiguration()
 	// 质量档变更后重新应用颜色/尺寸（Super::BeginPlay 已按默认 Medium 呈现过一次）。
 	ApplyMassPresentation();
 	ApplyPrototypeMeshPresentation();
+	UpdateArchetypeIndicatorPresentation();
 	if (BreakableAnchorComponent)
 	{
 		BreakableAnchorComponent->SetStructureEnabled(
@@ -415,6 +452,7 @@ void AVectorEnemy::HandleAnchorGroupBroken(
 	const int32 BrokenGroupCount)
 {
 	UpdateAnchorPresentation();
+	StructureBreakPulseSecondsRemaining = 0.35;
 	UE_LOG(LogVectorEnemy, Log,
 		TEXT("Enemy anchor presentation: enemy=%s side=%s broken=%d/2 launchable=%s"),
 		*GetName(),
@@ -437,6 +475,82 @@ void AVectorEnemy::UpdateAnchorPresentation()
 		RightAnchorMesh->SetVisibility(bHeavy && BreakableAnchorComponent
 			&& !BreakableAnchorComponent->IsGroupBroken(EVectorAnchorGroupSide::Right));
 	}
+}
+
+void AVectorEnemy::UpdateArchetypeIndicatorPresentation()
+{
+	if (!ArchetypeIndicatorMesh || !ArchetypeIndicatorLight)
+	{
+		return;
+	}
+
+	ArchetypeIndicatorMesh->SetVisibility(false);
+	ArchetypeIndicatorLight->SetIntensity(0.0f);
+	UStaticMesh* IndicatorMesh = nullptr;
+	FVector RelativeLocation = FVector(0.0, 0.0, 100.0);
+	FRotator RelativeRotation = FRotator::ZeroRotator;
+	FVector RelativeScale = FVector(0.25);
+	FLinearColor RoleColor = FLinearColor::White;
+	double RoleLightIntensity = 0.0;
+
+	switch (Archetype)
+	{
+	case EVectorEnemyArchetype::ChargerRammer:
+		IndicatorMesh = LoadObject<UStaticMesh>(nullptr,
+			TEXT("/Engine/BasicShapes/Cone.Cone"));
+		RelativeLocation = FVector(78.0, 0.0, 18.0);
+		RelativeRotation = FRotator(90.0, 0.0, 0.0);
+		RelativeScale = FVector(0.55, 0.24, 0.24);
+		RoleColor = FLinearColor(1.0f, 0.22f, 0.02f);
+		RoleLightIntensity = 2100.0;
+		break;
+	case EVectorEnemyArchetype::ArcShell:
+		IndicatorMesh = LoadObject<UStaticMesh>(nullptr,
+			TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+		RelativeLocation = FVector(0.0, 0.0, 135.0);
+		RelativeScale = FVector(0.24);
+		RoleColor = FLinearColor(0.08f, 0.55f, 1.0f);
+		RoleLightIntensity = 2600.0;
+		break;
+	case EVectorEnemyArchetype::CorrosionDrone:
+		IndicatorMesh = LoadObject<UStaticMesh>(nullptr,
+			TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+		RelativeLocation = FVector(0.0, 0.0, 125.0);
+		RelativeScale = FVector(0.34, 0.34, 0.08);
+		RoleColor = FLinearColor(0.18f, 1.0f, 0.04f);
+		RoleLightIntensity = 2600.0;
+		break;
+	case EVectorEnemyArchetype::HeavyRhinoBeetle:
+		// The paired removable anchor meshes are already the heavy role cue.
+		RoleColor = FLinearColor(0.72f, 0.12f, 1.0f);
+		RoleLightIntensity = 1600.0;
+		break;
+	case EVectorEnemyArchetype::LightHoppper:
+	default:
+		return;
+	}
+
+	if (IndicatorMesh)
+	{
+		ArchetypeIndicatorMesh->SetStaticMesh(IndicatorMesh);
+		ArchetypeIndicatorMesh->SetRelativeLocation(RelativeLocation);
+		ArchetypeIndicatorMesh->SetRelativeRotation(RelativeRotation);
+		ArchetypeIndicatorMesh->SetRelativeScale3D(RelativeScale);
+		ArchetypeIndicatorMesh->SetVisibility(true);
+		ArchetypeIndicatorMaterial =
+			ArchetypeIndicatorMesh->CreateAndSetMaterialInstanceDynamic(0);
+		if (ArchetypeIndicatorMaterial)
+		{
+			ArchetypeIndicatorMaterial->SetVectorParameterValue(
+				TEXT("Color"), RoleColor);
+		}
+	}
+	ArchetypeIndicatorLight->SetLightColor(RoleColor);
+	ArchetypeIndicatorLight->SetIntensity(static_cast<float>(RoleLightIntensity));
+	UE_LOG(LogVectorEnemy, Log,
+		TEXT("Enemy role cue: enemy=%s archetype=%s geometry=%s color=%s collision=NONE nav=NONE"),
+		*GetName(), *UEnum::GetValueAsString(Archetype),
+		*GetNameSafe(IndicatorMesh), *RoleColor.ToString());
 }
 
 bool AVectorEnemy::ShouldPauseAI() const

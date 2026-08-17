@@ -93,3 +93,21 @@ FString LexToString(const EVectorRunModuleType Type)
 		return TEXT("NO MODULE");
 	}
 }
+
+FString LexToOfferDescription(const EVectorRunModuleType Type)
+{
+	switch (Type)
+	{
+	case EVectorRunModuleType::MomentumRecycler:
+		return TEXT("RECYCLER - REFUND FAST VECTOR SHOTS");
+	case EVectorRunModuleType::TwinVector:
+		return TEXT("TWIN VECTOR - RELAY 45% TO A SECOND TARGET");
+	case EVectorRunModuleType::LateralCutter:
+		return TEXT("LATERAL CUTTER - VECTOR SHOTS BREAK SIDE ANCHORS");
+	case EVectorRunModuleType::LiftVectorCoupler:
+		return TEXT("LIFT COUPLER - AIR CONTROL + AUTO/MANUAL SLAM");
+	case EVectorRunModuleType::None:
+	default:
+		return TEXT("NO RULE CHANGE");
+	}
+}

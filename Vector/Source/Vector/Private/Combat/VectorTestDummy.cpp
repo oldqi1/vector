@@ -71,6 +71,15 @@ AVectorTestDummy::AVectorTestDummy(const FObjectInitializer& ObjectInitializer)
 	LiftForkLight->SetAttenuationRadius(420.0f);
 	LiftForkLight->SetVisibility(true);
 
+	ImpactFeedbackLight = CreateDefaultSubobject<UPointLightComponent>(
+		TEXT("ImpactFeedbackLight"));
+	ImpactFeedbackLight->SetupAttachment(GetCapsuleComponent());
+	ImpactFeedbackLight->SetRelativeLocation(FVector(0.0, 0.0, 45.0));
+	ImpactFeedbackLight->SetIntensity(0.0f);
+	ImpactFeedbackLight->SetAttenuationRadius(360.0f);
+	ImpactFeedbackLight->SetCastShadows(false);
+	ImpactFeedbackLight->SetVisibility(true);
+
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMeshFinder(
 		TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (CubeMeshFinder.Succeeded())
@@ -91,6 +100,13 @@ void AVectorTestDummy::BeginPlay()
 	{
 		StabilityComponent->MassClass = MassClass;
 	}
+	if (ImpactCollisionComponent)
+	{
+		ImpactCollisionComponent->OnBodyImpact.AddUObject(
+			this, &AVectorTestDummy::HandleBodyImpactFeedback);
+		ImpactCollisionComponent->OnSurfaceContact.AddUObject(
+			this, &AVectorTestDummy::HandleSurfaceImpactFeedback);
+	}
 	ApplyMassPresentation();
 }
 
@@ -98,6 +114,15 @@ void AVectorTestDummy::Tick(const float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	const double SafeDeltaSeconds = FMath::Max(0.0f, DeltaSeconds);
+	if (ImpactFeedbackSecondsRemaining > 0.0 && ImpactFeedbackLight)
+	{
+		ImpactFeedbackSecondsRemaining = FMath::Max(
+			0.0, ImpactFeedbackSecondsRemaining - SafeDeltaSeconds);
+		const double Alpha = ImpactFeedbackDurationSeconds > 0.0
+			? ImpactFeedbackSecondsRemaining / ImpactFeedbackDurationSeconds : 0.0;
+		ImpactFeedbackLight->SetIntensity(static_cast<float>(
+			ImpactFeedbackPeakIntensity * FMath::Clamp(Alpha, 0.0, 1.0)));
+	}
 	if (LiftForkFlashSecondsRemaining > 0.0)
 	{
 		LiftForkFlashSecondsRemaining = FMath::Max(
@@ -142,6 +167,52 @@ void AVectorTestDummy::Tick(const float DeltaSeconds)
 		}
 	}
 	UpdateStaggerPresentation();
+}
+
+void AVectorTestDummy::HandleBodyImpactFeedback(AActor* OtherActor)
+{
+	if (!OtherActor)
+	{
+		return;
+	}
+	const UVectorCharacterMovementComponent* Movement =
+		FindComponentByClass<UVectorCharacterMovementComponent>();
+	TriggerImpactFeedback(Movement
+		? Movement->GetEffectiveVelocityForPendingStep().Size()
+		: GetVelocity().Size());
+}
+
+void AVectorTestDummy::HandleSurfaceImpactFeedback(
+	const double ClosingSpeedCmPerSecond)
+{
+	TriggerImpactFeedback(ClosingSpeedCmPerSecond);
+}
+
+void AVectorTestDummy::TriggerImpactFeedback(const double ImpactSpeedCmPerSecond)
+{
+	if (!ImpactFeedbackLight || !FMath::IsFinite(ImpactSpeedCmPerSecond)
+		|| ImpactSpeedCmPerSecond < 300.0)
+	{
+		return;
+	}
+	FLinearColor PulseColor(0.1f, 0.85f, 1.0f);
+	ImpactFeedbackDurationSeconds = 0.09;
+	ImpactFeedbackPeakIntensity = 3200.0;
+	if (ImpactSpeedCmPerSecond >= 1200.0)
+	{
+		PulseColor = FLinearColor(1.0f, 0.12f, 0.7f);
+		ImpactFeedbackDurationSeconds = 0.18;
+		ImpactFeedbackPeakIntensity = 10500.0;
+	}
+	else if (ImpactSpeedCmPerSecond >= 700.0)
+	{
+		PulseColor = FLinearColor(1.0f, 0.72f, 0.05f);
+		ImpactFeedbackDurationSeconds = 0.13;
+		ImpactFeedbackPeakIntensity = 6500.0;
+	}
+	ImpactFeedbackSecondsRemaining = ImpactFeedbackDurationSeconds;
+	ImpactFeedbackLight->SetLightColor(PulseColor);
+	ImpactFeedbackLight->SetIntensity(static_cast<float>(ImpactFeedbackPeakIntensity));
 }
 
 void AVectorTestDummy::TriggerLiftForkPresentation()

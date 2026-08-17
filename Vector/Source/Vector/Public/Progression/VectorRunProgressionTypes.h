@@ -61,3 +61,4 @@ struct VECTOR_API FVectorRunOfferPolicy
 
 VECTOR_API FString LexToString(EVectorCalibrationType Type);
 VECTOR_API FString LexToString(EVectorRunModuleType Type);
+VECTOR_API FString LexToOfferDescription(EVectorRunModuleType Type);

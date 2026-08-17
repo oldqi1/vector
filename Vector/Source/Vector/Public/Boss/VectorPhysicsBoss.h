@@ -8,6 +8,8 @@
 
 class AVectorKineticOrb;
 class UPointLightComponent;
+class UStaticMeshComponent;
+class UMaterialInstanceDynamic;
 enum class EVectorAnchorGroupSide : uint8;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
@@ -46,6 +48,10 @@ public:
 	/** Persistent shell-state light, separate from attack and lift feedback. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Presentation")
 	TObjectPtr<UPointLightComponent> BossPhaseLight;
+
+	/** Collision-free core silhouette, revealed only after both shell anchors break. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Presentation")
+	TObjectPtr<UStaticMeshComponent> ExposedCoreMesh;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Ram", meta = (ClampMin = "0.0", Units = "cm"))
 	double RamTriggerRangeCm = 3000.0;
@@ -169,4 +175,7 @@ private:
 	FVector LockedAmmoAimPoint = FVector::ZeroVector;
 	double KineticOrbSupplySecondsRemaining = 1.5;
 	bool bStaggerCounterBurstPending = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> CoreMaterial;
 };

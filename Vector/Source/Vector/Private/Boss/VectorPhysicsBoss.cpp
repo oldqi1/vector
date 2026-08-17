@@ -20,6 +20,7 @@
 #include "Impact/VectorImpactMath.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Stability/VectorStabilityComponent.h"
+#include "UObject/ConstructorHelpers.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVectorBoss, Log, All);
 
@@ -65,6 +66,21 @@ AVectorPhysicsBoss::AVectorPhysicsBoss(const FObjectInitializer& ObjectInitializ
 	BossPhaseLight->SetRelativeLocation(FVector(0.0, 0.0, 110.0));
 	BossPhaseLight->SetCastShadows(false);
 	BossPhaseLight->SetVisibility(true);
+	ExposedCoreMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ExposedCore"));
+	ExposedCoreMesh->SetupAttachment(GetCapsuleComponent());
+	ExposedCoreMesh->SetRelativeLocation(FVector(0.0, 0.0, 72.0));
+	ExposedCoreMesh->SetRelativeScale3D(FVector(0.72));
+	ExposedCoreMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	ExposedCoreMesh->SetGenerateOverlapEvents(false);
+	ExposedCoreMesh->SetCanEverAffectNavigation(false);
+	ExposedCoreMesh->SetCastShadow(false);
+	ExposedCoreMesh->SetVisibility(false);
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CoreSphereMesh(
+		TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+	if (CoreSphereMesh.Succeeded())
+	{
+		ExposedCoreMesh->SetStaticMesh(CoreSphereMesh.Object);
+	}
 
 	if (HealthComponent)
 	{
@@ -108,6 +124,15 @@ AVectorPhysicsBoss::AVectorPhysicsBoss(const FObjectInitializer& ObjectInitializ
 void AVectorPhysicsBoss::BeginPlay()
 {
 	Super::BeginPlay();
+	if (ExposedCoreMesh)
+	{
+		CoreMaterial = ExposedCoreMesh->CreateAndSetMaterialInstanceDynamic(0);
+		if (CoreMaterial)
+		{
+			CoreMaterial->SetVectorParameterValue(
+				TEXT("Color"), FLinearColor(1.0f, 0.03f, 0.01f));
+		}
+	}
 	const FVector BossSpawnLocation = GetActorLocation();
 	ConfigureEncounterVoidRecovery(
 		BossSpawnLocation.Z - FMath::Max(100.0, VoidRecoveryDepthBelowSpawnCm),
@@ -905,6 +930,12 @@ void AVectorPhysicsBoss::UpdateBossPresentation()
 		BossPhaseLight->SetLightColor(Color);
 		BossPhaseLight->SetIntensity(PhaseLightIntensity);
 		BossPhaseLight->SetAttenuationRadius(760.0f);
+	}
+	if (ExposedCoreMesh)
+	{
+		const bool bCoreVisible = BossState.GetPhase() == EVectorPhysicsBossPhase::Overload;
+		ExposedCoreMesh->SetVisibility(bCoreVisible);
+		ExposedCoreMesh->SetRelativeScale3D(bCoreVisible ? FVector(0.72) : FVector(0.01));
 	}
 }
 

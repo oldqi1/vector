@@ -189,6 +189,8 @@ private:
 	void HandleCalibrationChoiceOnePressed();
 	void HandleCalibrationChoiceTwoPressed();
 	void HandleCalibrationChoiceThreePressed();
+	void HandlePausePressed();
+	void HandleQuitPressed();
 	void SelectEquipment(EVectorEquipmentSlot NewEquipmentSlot);
 
 	/** 空格按下：起跳。 */
@@ -253,6 +255,12 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> CalibrationChoiceThreeInputAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> PauseInputAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> QuitInputAction;
 
 	/** 跳跃动作（空格）。 */
 	UPROPERTY(Transient)

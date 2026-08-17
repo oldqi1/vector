@@ -27,6 +27,8 @@
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
+#include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "Physics/VectorPhysicsModifierComponent.h"
 #include "Progression/VectorRunProgressionComponent.h"
 #include "UObject/ConstructorHelpers.h"
@@ -302,6 +304,8 @@ void AVectorCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		EnhancedInput->BindAction(CalibrationChoiceOneInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleCalibrationChoiceOnePressed);
 		EnhancedInput->BindAction(CalibrationChoiceTwoInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleCalibrationChoiceTwoPressed);
 		EnhancedInput->BindAction(CalibrationChoiceThreeInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleCalibrationChoiceThreePressed);
+		EnhancedInput->BindAction(PauseInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandlePausePressed);
+		EnhancedInput->BindAction(QuitInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleQuitPressed);
 		EnhancedInput->BindAction(JumpInputAction, ETriggerEvent::Started, this, &AVectorCharacter::HandleJumpPressed);
 		EnhancedInput->BindAction(JumpInputAction, ETriggerEvent::Completed, this, &AVectorCharacter::HandleJumpReleased);
 		EnhancedInput->BindAction(ZoomInputAction, ETriggerEvent::Triggered, this, &AVectorCharacter::HandleZoomInput);
@@ -314,7 +318,7 @@ void AVectorCharacter::EnsureRuntimeInput()
 		&& AttackInputAction && SelectHammerInputAction && HookInputAction
 		&& LubricantInputAction && BuoyantSporeInputAction && LiftForkInputAction
 		&& CalibrationChoiceOneInputAction && CalibrationChoiceTwoInputAction
-		&& CalibrationChoiceThreeInputAction
+		&& CalibrationChoiceThreeInputAction && PauseInputAction && QuitInputAction
 		&& JumpInputAction && ZoomInputAction && MoveInputMappingContext)
 	{
 		return;
@@ -353,6 +357,12 @@ void AVectorCharacter::EnsureRuntimeInput()
 	CalibrationChoiceTwoInputAction->ValueType = EInputActionValueType::Boolean;
 	CalibrationChoiceThreeInputAction = NewObject<UInputAction>(this, TEXT("IA_CalibrationChoiceThree"));
 	CalibrationChoiceThreeInputAction->ValueType = EInputActionValueType::Boolean;
+	PauseInputAction = NewObject<UInputAction>(this, TEXT("IA_Pause"));
+	PauseInputAction->ValueType = EInputActionValueType::Boolean;
+	PauseInputAction->bTriggerWhenPaused = true;
+	QuitInputAction = NewObject<UInputAction>(this, TEXT("IA_QuitWhilePaused"));
+	QuitInputAction->ValueType = EInputActionValueType::Boolean;
+	QuitInputAction->bTriggerWhenPaused = true;
 
 	JumpInputAction = NewObject<UInputAction>(this, TEXT("IA_Jump"));
 	JumpInputAction->ValueType = EInputActionValueType::Boolean;
@@ -397,6 +407,8 @@ void AVectorCharacter::EnsureRuntimeInput()
 	MoveInputMappingContext->MapKey(CalibrationChoiceOneInputAction, EKeys::Z);
 	MoveInputMappingContext->MapKey(CalibrationChoiceTwoInputAction, EKeys::X);
 	MoveInputMappingContext->MapKey(CalibrationChoiceThreeInputAction, EKeys::C);
+	MoveInputMappingContext->MapKey(PauseInputAction, EKeys::Escape);
+	MoveInputMappingContext->MapKey(QuitInputAction, EKeys::Q);
 
 	// 空格：跳跃（躲避冲锋/跨障）。
 	MoveInputMappingContext->MapKey(JumpInputAction, EKeys::SpaceBar);
@@ -563,6 +575,32 @@ void AVectorCharacter::HandleCalibrationChoiceThreePressed()
 	{
 		RunProgression->SelectPendingChoice(2);
 	}
+}
+
+void AVectorCharacter::HandlePausePressed()
+{
+	const bool bWasPaused = UGameplayStatics::IsGamePaused(this);
+	const bool bChanged = UGameplayStatics::SetGamePaused(this, !bWasPaused);
+	if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+	{
+		PlayerController->bShowMouseCursor = true;
+	}
+	UE_LOG(LogVectorPlayer, Log,
+		TEXT("Pause toggled: requested=%s changed=%s"),
+		bWasPaused ? TEXT("RESUME") : TEXT("PAUSE"),
+		bChanged ? TEXT("YES") : TEXT("no"));
+}
+
+void AVectorCharacter::HandleQuitPressed()
+{
+	if (!UGameplayStatics::IsGamePaused(this))
+	{
+		return;
+	}
+	APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	UE_LOG(LogVectorPlayer, Log, TEXT("Quit requested from pause overlay"));
+	UKismetSystemLibrary::QuitGame(
+		this, PlayerController, EQuitPreference::Quit, false);
 }
 
 void AVectorCharacter::SelectEquipment(const EVectorEquipmentSlot NewEquipmentSlot)

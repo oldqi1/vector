@@ -172,7 +172,7 @@ FString UVectorRunProgressionComponent::GetPendingChoiceLabel(
 	if (bRuleModuleOfferPending)
 	{
 		return PendingRuleModuleOffer.IsValidIndex(OfferIndex)
-			? LexToString(PendingRuleModuleOffer[OfferIndex]) : FString();
+			? LexToOfferDescription(PendingRuleModuleOffer[OfferIndex]) : FString();
 	}
 	return GetPendingCalibrationLabel(OfferIndex);
 }

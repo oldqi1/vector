@@ -14,6 +14,39 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogVectorEnemyRanged, Log, All);
 
+int32 FVectorEnemyRangedPatternMath::GetProjectileCount(
+	const EVectorEnemyRangedPattern Pattern,
+	const int32 SequenceIndex)
+{
+	switch (Pattern)
+	{
+	case EVectorEnemyRangedPattern::ArcWeakHoming:
+		return 1;
+	case EVectorEnemyRangedPattern::CorrosionVolley:
+		return FMath::Max(0, SequenceIndex) % 2 == 0 ? 1 : 3;
+	case EVectorEnemyRangedPattern::None:
+	default:
+		return 0;
+	}
+}
+
+double FVectorEnemyRangedPatternMath::GetSpreadAngleDegrees(
+	const int32 ProjectileIndex,
+	const int32 ProjectileCount,
+	const double MaximumSpreadDegrees)
+{
+	if (ProjectileCount <= 1 || ProjectileIndex < 0
+		|| ProjectileIndex >= ProjectileCount
+		|| !FMath::IsFinite(MaximumSpreadDegrees))
+	{
+		return 0.0;
+	}
+	const double Alpha = static_cast<double>(ProjectileIndex)
+		/ static_cast<double>(ProjectileCount - 1);
+	const double SafeSpread = FMath::Max(0.0, MaximumSpreadDegrees);
+	return FMath::Lerp(-SafeSpread, SafeSpread, Alpha);
+}
+
 UVectorEnemyRangedAttackComponent::UVectorEnemyRangedAttackComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
@@ -167,15 +200,23 @@ void UVectorEnemyRangedAttackComponent::ReleaseProjectiles(APawn* PlayerPawn)
 	const FVector BaseDirection =
 		(PlayerPawn->GetActorLocation() - Owner->GetActorLocation()).GetSafeNormal2D();
 	const bool bWeakHoming = Pattern == EVectorEnemyRangedPattern::ArcWeakHoming;
-	const int32 ProjectileCount = bWeakHoming
-		? 1 : ((AttackSequenceIndex++ % 2 == 0) ? 1 : 3);
+	const int32 ProjectileCount = FVectorEnemyRangedPatternMath::GetProjectileCount(
+		Pattern, AttackSequenceIndex);
+	if (Pattern == EVectorEnemyRangedPattern::CorrosionVolley)
+	{
+		++AttackSequenceIndex;
+	}
+	if (ProjectileCount <= 0)
+	{
+		CancelWarmup(TEXT("INVALID_PATTERN"));
+		return;
+	}
 	int32 SpawnedCount = 0;
 	for (int32 Index = 0; Index < ProjectileCount; ++Index)
 	{
-		const double Alpha = ProjectileCount <= 1
-			? 0.5 : static_cast<double>(Index) / (ProjectileCount - 1);
-		const double AngleDegrees = FMath::Lerp(
-			-VolleySpreadDegrees, VolleySpreadDegrees, Alpha);
+		const double AngleDegrees =
+			FVectorEnemyRangedPatternMath::GetSpreadAngleDegrees(
+				Index, ProjectileCount, VolleySpreadDegrees);
 		const FVector Direction = BaseDirection
 			.RotateAngleAxis(AngleDegrees, FVector::UpVector).GetSafeNormal2D();
 		if (SpawnProjectile(PlayerPawn, Direction, bWeakHoming))
@@ -264,14 +305,13 @@ void UVectorEnemyRangedAttackComponent::DrawTelegraph(const APawn* PlayerPawn) c
 	const FVector Start = Owner->GetActorLocation() + FVector(0.0, 0.0, 50.0);
 	const FVector BaseDirection =
 		(PlayerPawn->GetActorLocation() - Start).GetSafeNormal2D();
-	const int32 LaneCount = Pattern == EVectorEnemyRangedPattern::CorrosionVolley
-		? ((AttackSequenceIndex % 2 == 0) ? 1 : 3) : 1;
+	const int32 LaneCount = FVectorEnemyRangedPatternMath::GetProjectileCount(
+		Pattern, AttackSequenceIndex);
 	for (int32 Index = 0; Index < LaneCount; ++Index)
 	{
-		const double Alpha = LaneCount <= 1
-			? 0.5 : static_cast<double>(Index) / (LaneCount - 1);
 		const FVector Direction = BaseDirection.RotateAngleAxis(
-			FMath::Lerp(-VolleySpreadDegrees, VolleySpreadDegrees, Alpha),
+			FVectorEnemyRangedPatternMath::GetSpreadAngleDegrees(
+				Index, LaneCount, VolleySpreadDegrees),
 			FVector::UpVector).GetSafeNormal2D();
 		DrawDebugDirectionalArrow(World, Start, Start + Direction * 850.0,
 			55.0f, FColor::Red, false, 0.05f, 0, 5.0f);

@@ -47,6 +47,31 @@ def clear_previous():
     log("cleared %d previous preview actors" % removed)
 
 
+def spawn_route_lighting(module_count):
+    """Deterministic neutral key/fills; semantic node lights keep their own colors."""
+    key = subsystem().spawn_actor_from_class(
+        unreal.DirectionalLight, unreal.Vector(0.0, 0.0, 1200.0))
+    if key is None:
+        raise RuntimeError("failed to spawn route key light")
+    key.set_actor_label(PREFIX + "Route_KeyLight")
+    key.set_actor_rotation(
+        unreal.Rotator(roll=0.0, pitch=-52.0, yaw=-32.0), False)
+    key.directional_light_component.set_editor_property("intensity", 5.0)
+
+    for module_index in range(module_count):
+        fill = subsystem().spawn_actor_from_class(
+            unreal.PointLight,
+            unreal.Vector(module_index * MODULE_SPACING, 0.0, 950.0))
+        if fill is None:
+            raise RuntimeError("failed to spawn route fill light %d" % module_index)
+        fill.set_actor_label(PREFIX + "Route_Fill_%02d" % module_index)
+        fill.point_light_component.set_editor_property("intensity", 4800.0)
+        fill.point_light_component.set_editor_property(
+            "attenuation_radius", 1900.0)
+        fill.point_light_component.set_editor_property(
+            "light_color", unreal.Color(205, 220, 255, 255))
+
+
 def spawn_cube(location, scale, label, rotation=None):
     mesh = unreal.load_asset("/Engine/BasicShapes/Cube.Cube")
     if mesh is None:
@@ -432,6 +457,7 @@ def main(seed=SEED):
     }
     clear_previous()
     configure_game_mode(classes["game_mode"])
+    spawn_route_lighting(len(sequence))
 
     route_length = (len(sequence) - 1) * MODULE_SPACING + 1800.0
     spawn_cube(

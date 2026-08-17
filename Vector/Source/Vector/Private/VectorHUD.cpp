@@ -16,6 +16,7 @@
 #include "Hunt/VectorContractExit.h"
 #include "Hunt/VectorEncounterComponent.h"
 #include "Hunt/VectorHuntProgressComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Physics/VectorPhysicsModifierComponent.h"
 #include "PCG/VectorPCGEncounterDirector.h"
 #include "Progression/VectorRunProgressionComponent.h"
@@ -27,6 +28,25 @@ void AVectorHUD::DrawHUD()
 	Super::DrawHUD();
 	if (!Canvas || !PlayerOwner)
 	{
+		return;
+	}
+	if (UGameplayStatics::IsGamePaused(this) && GEngine)
+	{
+		const float PanelWidth = 520.0f;
+		const float PanelHeight = 150.0f;
+		const float PanelX = (Canvas->ClipX - PanelWidth) * 0.5f;
+		const float PanelY = (Canvas->ClipY - PanelHeight) * 0.5f;
+		DrawRect(FLinearColor(0.01f, 0.02f, 0.035f, 0.94f),
+			PanelX, PanelY, PanelWidth, PanelHeight);
+		DrawText(TEXT("PAUSED"), FLinearColor(0.1f, 0.95f, 1.0f),
+			PanelX + 195.0f, PanelY + 28.0f,
+			GEngine->GetLargeFont(), 1.0f, false);
+		DrawText(TEXT("ESC  RESUME"), FLinearColor::White,
+			PanelX + 118.0f, PanelY + 88.0f,
+			GEngine->GetMediumFont(), 0.8f, false);
+		DrawText(TEXT("Q  QUIT"), FLinearColor(1.0f, 0.3f, 0.2f),
+			PanelX + 310.0f, PanelY + 88.0f,
+			GEngine->GetMediumFont(), 0.8f, false);
 		return;
 	}
 
@@ -200,21 +220,39 @@ void AVectorHUD::DrawHUD()
 					const float OfferWidth = 900.0f;
 					const float OfferX = (Canvas->ClipX - OfferWidth) * 0.5f;
 					const float OfferY = Canvas->ClipY * 0.22f;
+					const bool bRuleModuleOffer = Progression->HasPendingRuleModule();
+					const float OfferHeight = bRuleModuleOffer ? 168.0f : 92.0f;
 					DrawRect(FLinearColor(0.01f, 0.025f, 0.04f, 0.92f),
-						OfferX, OfferY, OfferWidth, 92.0f);
+						OfferX, OfferY, OfferWidth, OfferHeight);
 					DrawText(
-						Progression->HasPendingRuleModule()
+						bRuleModuleOffer
 							? TEXT("SYSTEM UPGRADE - INSTALL ONE RULE MODULE")
 							: TEXT("ROOM CLEAR - INSTALL ONE BASE CALIBRATION"),
 						FLinearColor(0.15f, 0.95f, 1.0f), OfferX + 210.0f, OfferY + 12.0f,
 						GEngine->GetMediumFont(), 0.9f, false);
-					DrawText(
-						FString::Printf(TEXT("[Z] %s     [X] %s     [C] %s"),
-							*Progression->GetPendingChoiceLabel(0),
-							*Progression->GetPendingChoiceLabel(1),
-							*Progression->GetPendingChoiceLabel(2)),
-						FLinearColor::White, OfferX + 72.0f, OfferY + 54.0f,
-						GEngine->GetSmallFont(), 0.9f, false);
+					if (bRuleModuleOffer)
+					{
+						static const TCHAR* ChoiceKeys[] = { TEXT("Z"), TEXT("X"), TEXT("C") };
+						for (int32 ChoiceIndex = 0; ChoiceIndex < 3; ++ChoiceIndex)
+						{
+							DrawText(
+								FString::Printf(TEXT("[%s]  %s"), ChoiceKeys[ChoiceIndex],
+									*Progression->GetPendingChoiceLabel(ChoiceIndex)),
+								FLinearColor::White, OfferX + 70.0f,
+								OfferY + 54.0f + ChoiceIndex * 32.0f,
+								GEngine->GetSmallFont(), 0.82f, false);
+						}
+					}
+					else
+					{
+						DrawText(
+							FString::Printf(TEXT("[Z] %s     [X] %s     [C] %s"),
+								*Progression->GetPendingChoiceLabel(0),
+								*Progression->GetPendingChoiceLabel(1),
+								*Progression->GetPendingChoiceLabel(2)),
+							FLinearColor::White, OfferX + 72.0f, OfferY + 54.0f,
+							GEngine->GetSmallFont(), 0.9f, false);
+					}
 				}
 			}
 			if (const UVectorActionLockComponent* Lock =
@@ -313,6 +351,30 @@ void AVectorHUD::DrawHUD()
 				FLinearColor(0.3f, 0.85f, 1.0f),
 				Canvas->ClipX - 390.0f, 36.0f,
 				GEngine->GetMediumFont(), 0.9f, false);
+			const float LegendX = Canvas->ClipX - 390.0f;
+			const float LegendY = 68.0f;
+			DrawRect(FLinearColor(0.01f, 0.025f, 0.04f, 0.78f),
+				LegendX - 12.0f, LegendY - 8.0f, 355.0f, 58.0f);
+			DrawText(TEXT("CIRCUIT"), FLinearColor::White,
+				LegendX, LegendY, GEngine->GetSmallFont(), 0.72f, false);
+			DrawText(TEXT("SOURCE"), FLinearColor(1.0f, 0.28f, 0.03f),
+				LegendX + 70.0f, LegendY, GEngine->GetSmallFont(), 0.72f, false);
+			DrawText(TEXT(">"), FLinearColor(0.75f, 0.8f, 0.85f),
+				LegendX + 129.0f, LegendY, GEngine->GetSmallFont(), 0.72f, false);
+			DrawText(TEXT("CONVERTER"), FLinearColor(0.02f, 0.9f, 1.0f),
+				LegendX + 143.0f, LegendY, GEngine->GetSmallFont(), 0.72f, false);
+			DrawText(TEXT(">"), FLinearColor(0.75f, 0.8f, 0.85f),
+				LegendX + 224.0f, LegendY, GEngine->GetSmallFont(), 0.72f, false);
+			DrawText(TEXT("RECEIVER"), FLinearColor(1.0f, 0.06f, 0.62f),
+				LegendX + 238.0f, LegendY, GEngine->GetSmallFont(), 0.72f, false);
+			const bool bInSafeStart = Director->GetActiveWaveNumber() <= 0;
+			DrawText(
+				bInSafeStart
+					? TEXT("READ THE MACHINE, THEN ADVANCE EAST")
+					: TEXT("BUILD SPEED, CHANGE PATH, CASH OUT THE HIT"),
+				FLinearColor(0.78f, 0.84f, 0.9f),
+				LegendX, LegendY + 24.0f,
+				GEngine->GetSmallFont(), 0.65f, false);
 			break;
 		}
 

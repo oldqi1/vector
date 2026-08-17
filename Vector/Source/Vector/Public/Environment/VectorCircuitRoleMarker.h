@@ -10,6 +10,7 @@ class UPointLightComponent;
 class USceneComponent;
 class UStaticMeshComponent;
 class UTextRenderComponent;
+class UMaterialInstanceDynamic;
 
 /**
  * Non-interactive semantic marker for a real tactical-circuit node.
@@ -52,4 +53,7 @@ public:
 
 private:
 	void RefreshPresentation();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> GlyphMaterial;
 };

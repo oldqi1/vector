@@ -17,6 +17,19 @@ enum class EVectorEnemyRangedPattern : uint8
 	CorrosionVolley,
 };
 
+/** Pure volley grammar shared by pre-fire telegraphs, release, and Automation. */
+struct VECTOR_API FVectorEnemyRangedPatternMath
+{
+	static int32 GetProjectileCount(
+		EVectorEnemyRangedPattern Pattern,
+		int32 SequenceIndex);
+
+	static double GetSpreadAngleDegrees(
+		int32 ProjectileIndex,
+		int32 ProjectileCount,
+		double MaximumSpreadDegrees);
+};
+
 /**
  * Readable ranged enemy grammar built from normal physical targets.
  * Projectiles can be redirected by the Vector Gun and keep using the shared
