@@ -31,6 +31,46 @@ double FVectorImpactMath::ComputeMassAdjustedSpeed(
 	return BaseSpeedCmPerSecond / FMath::Max(0.1, EffectiveMass);
 }
 
+bool FVectorImpactMath::ComputeBallisticLaunchVelocity(
+	const FVector& Start,
+	const FVector& Target,
+	const double FlightSeconds,
+	const double GravityZCmPerSecondSquared,
+	FVector& OutVelocity)
+{
+	OutVelocity = FVector::ZeroVector;
+	if (!VectorImpactMathInternal::IsFiniteVector(Start)
+		|| !VectorImpactMathInternal::IsFiniteVector(Target)
+		|| !FMath::IsFinite(FlightSeconds)
+		|| !FMath::IsFinite(GravityZCmPerSecondSquared)
+		|| FlightSeconds <= UE_SMALL_NUMBER
+		|| GravityZCmPerSecondSquared >= 0.0)
+	{
+		return false;
+	}
+	OutVelocity = (Target - Start) / FlightSeconds;
+	OutVelocity.Z -= 0.5 * GravityZCmPerSecondSquared * FlightSeconds;
+	return VectorImpactMathInternal::IsFiniteVector(OutVelocity);
+}
+
+FVector FVectorImpactMath::SampleBallisticPosition(
+	const FVector& Start,
+	const FVector& InitialVelocity,
+	const double GravityZCmPerSecondSquared,
+	const double TimeSeconds)
+{
+	if (!VectorImpactMathInternal::IsFiniteVector(Start)
+		|| !VectorImpactMathInternal::IsFiniteVector(InitialVelocity)
+		|| !FMath::IsFinite(GravityZCmPerSecondSquared)
+		|| !FMath::IsFinite(TimeSeconds))
+	{
+		return Start;
+	}
+	const double SafeTime = FMath::Max(0.0, TimeSeconds);
+	return Start + InitialVelocity * SafeTime
+		+ FVector::UpVector * (0.5 * GravityZCmPerSecondSquared * FMath::Square(SafeTime));
+}
+
 double FVectorImpactMath::ComputePlanarClosingSpeed(
 	const FVector& StrikerVelocity,
 	const FVector& TargetVelocity,

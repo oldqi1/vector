@@ -17,13 +17,17 @@ namespace VectorTacticalLayoutInternal
 		const TCHAR* Id,
 		const EVectorTacticalModuleType Type,
 		const EVectorPhysicsOpportunity Opportunities,
-		const int32 EnemyBudget)
+		const int32 EnemyBudget,
+		const int32 HeightLayerCount = 1,
+		const double MaximumHeightDifferenceCm = 0.0)
 	{
 		FVectorTacticalModuleDefinition Module;
 		Module.ModuleId = FName(Id);
 		Module.Type = Type;
 		Module.Opportunities = Opportunities;
 		Module.EnemyBudget = EnemyBudget;
+		Module.HeightLayerCount = FMath::Max(1, HeightLayerCount);
+		Module.MaximumHeightDifferenceCm = FMath::Max(0.0, MaximumHeightDifferenceCm);
 		return Module;
 	}
 
@@ -43,7 +47,7 @@ namespace VectorTacticalLayoutInternal
 			| EVectorPhysicsOpportunity::TetherSwingArc
 			| EVectorPhysicsOpportunity::HeightDrop
 			| EVectorPhysicsOpportunity::RecoveryPocket,
-			0);
+			0, 3, 650.0);
 	}
 
 	FVectorTacticalModuleDefinition MakeExtraction()
@@ -164,6 +168,27 @@ bool FVectorTacticalLayout::HasOpportunity(const EVectorPhysicsOpportunity Oppor
 	return false;
 }
 
+int32 FVectorTacticalLayout::GetMaximumHeightLayerCount() const
+{
+	int32 MaximumLayers = 1;
+	for (const FVectorTacticalModuleDefinition& Module : Modules)
+	{
+		MaximumLayers = FMath::Max(MaximumLayers, Module.HeightLayerCount);
+	}
+	return MaximumLayers;
+}
+
+double FVectorTacticalLayout::GetMaximumHeightDifferenceCm() const
+{
+	double MaximumDifference = 0.0;
+	for (const FVectorTacticalModuleDefinition& Module : Modules)
+	{
+		MaximumDifference = FMath::Max(
+			MaximumDifference, Module.MaximumHeightDifferenceCm);
+	}
+	return MaximumDifference;
+}
+
 FString FVectorTacticalLayout::DescribeModuleSequence() const
 {
 	FString ModuleSequence;
@@ -182,10 +207,11 @@ FString FVectorTacticalLayout::Describe() const
 {
 	const FString ModuleSequence = DescribeModuleSequence();
 	return FString::Printf(
-		TEXT("seed=%d resolved=%d attempts=%d fallback=%s valid=%s score=%.1f modules=%s"),
+		TEXT("seed=%d resolved=%d attempts=%d fallback=%s valid=%s score=%.1f verticalLayers=%d heightDelta=%.0f modules=%s"),
 		RequestedSeed, ResolvedSeed, GenerationAttempts,
 		bUsedFallback ? TEXT("YES") : TEXT("no"),
-		bValid ? TEXT("YES") : TEXT("no"), TacticalScore, *ModuleSequence);
+		bValid ? TEXT("YES") : TEXT("no"), TacticalScore,
+		GetMaximumHeightLayerCount(), GetMaximumHeightDifferenceCm(), *ModuleSequence);
 }
 
 FVectorTacticalLayout FVectorTacticalGenerator::Generate(
@@ -252,6 +278,15 @@ bool FVectorTacticalGenerator::Validate(
 				*Module.ModuleId.ToString());
 			return false;
 		}
+		if (Module.HasOpportunity(EVectorPhysicsOpportunity::HeightDrop)
+			&& (Module.HeightLayerCount < 2 || Module.MaximumHeightDifferenceCm < 150.0))
+		{
+			OutFailureReason = FString::Printf(
+				TEXT("HeightDrop module lacks real vertical geometry: %s layers=%d delta=%.0f"),
+				*Module.ModuleId.ToString(), Module.HeightLayerCount,
+				Module.MaximumHeightDifferenceCm);
+			return false;
+		}
 		if (bHasPreviousEncounter && Module.Opportunities == PreviousOpportunities)
 		{
 			OutFailureReason = TEXT("consecutive encounter opportunity sets repeat");
@@ -274,6 +309,12 @@ bool FVectorTacticalGenerator::Validate(
 			EVectorPhysicsOpportunity::HardWallReceiver | EVectorPhysicsOpportunity::LowFrictionPath))
 	{
 		OutFailureReason = TEXT("global physical opportunity requirement missing");
+		return false;
+	}
+	if (Layout.GetMaximumHeightLayerCount() < 2
+		|| Layout.GetMaximumHeightDifferenceCm() < 150.0)
+	{
+		OutFailureReason = TEXT("route can collapse to one height layer");
 		return false;
 	}
 	if (Layout.TacticalScore < Rules.MinimumTacticalScore)
@@ -329,23 +370,23 @@ const TArray<FVectorTacticalModuleDefinition>& FVectorTacticalGenerator::GetEnco
 			EVectorPhysicsOpportunity::LongLaunchLane
 			| EVectorPhysicsOpportunity::CrowdReceiver
 			| EVectorPhysicsOpportunity::TetherSwingArc
-			| EVectorPhysicsOpportunity::RecoveryPocket, 10),
+			| EVectorPhysicsOpportunity::RecoveryPocket, 10, 2, 260.0),
 		MakeModule(TEXT("HardLane"), EVectorTacticalModuleType::HardLane,
 			EVectorPhysicsOpportunity::LongLaunchLane
 			| EVectorPhysicsOpportunity::HardWallReceiver
 			| EVectorPhysicsOpportunity::ChargeBaitLane
 			| EVectorPhysicsOpportunity::HeightDrop
-			| EVectorPhysicsOpportunity::RecoveryPocket, 9),
+			| EVectorPhysicsOpportunity::RecoveryPocket, 9, 2, 420.0),
 		MakeModule(TEXT("HeightShelf"), EVectorTacticalModuleType::HeightShelf,
 			EVectorPhysicsOpportunity::HardWallReceiver
 			| EVectorPhysicsOpportunity::CrowdReceiver
 			| EVectorPhysicsOpportunity::HeightDrop
-			| EVectorPhysicsOpportunity::RecoveryPocket, 8),
+			| EVectorPhysicsOpportunity::RecoveryPocket, 8, 3, 650.0),
 		MakeModule(TEXT("SlickCross"), EVectorTacticalModuleType::SlickCross,
 			EVectorPhysicsOpportunity::CrowdReceiver
 			| EVectorPhysicsOpportunity::TetherSwingArc
 			| EVectorPhysicsOpportunity::LowFrictionPath
-			| EVectorPhysicsOpportunity::RecoveryPocket, 9),
+			| EVectorPhysicsOpportunity::RecoveryPocket, 9, 2, 300.0),
 	};
 	return Catalog;
 }

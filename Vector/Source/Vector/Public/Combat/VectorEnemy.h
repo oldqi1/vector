@@ -7,6 +7,7 @@
 #include "VectorEnemy.generated.h"
 
 class AVectorOrganPickup;
+class UDamageType;
 
 /**
  * 敌人三型枚举（S04，灰盒期一个类三型配置，攻击行为分化后再拆子类）。
@@ -77,6 +78,7 @@ public:
 
 	/** 失衡/倒地/冲量驱动期间是否应暂停 AI（控制器在 Tick 中查询）。 */
 	virtual bool ShouldPauseAI() const;
+	virtual void FellOutOfWorld(const UDamageType& DamageType) override;
 
 	/** 近身攻击组件（P2：预警→扑击玩家；攻击中暂停追击）。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Vector|Enemy")

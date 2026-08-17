@@ -14,6 +14,16 @@ enum class EVectorPhysicsBossPhase : uint8
 	Defeated,
 };
 
+/** Deterministic attack vocabulary; runtime presentation remains Actor-owned. */
+enum class EVectorPhysicsBossAttack : uint8
+{
+	None,
+	Ram,
+	Slam,
+	AerialBurst,
+	AmmoLaunch,
+};
+
 /** Tunable phase thresholds and outputs. The state machine itself owns no Actor. */
 struct VECTOR_API FVectorPhysicsBossRules
 {
@@ -63,6 +73,7 @@ struct VECTOR_API FVectorPhysicsBossState
 	double GetRecoverySeconds() const;
 	int32 GetMaximumConcurrentAdds() const;
 	bool CanSpawnAdd(int32 CurrentActiveAdds) const;
+	EVectorPhysicsBossAttack SelectAttack(int32 SequenceIndex, bool bAmmoAvailable) const;
 	FString Describe() const;
 
 private:

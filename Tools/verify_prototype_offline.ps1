@@ -12,8 +12,8 @@ try {
     Write-Output "[2/4] Checking Unreal Automation registrations..."
     $TestFiles = Get-ChildItem "Vector/Source/Vector/Private/Tests" -Filter "*.cpp" -File
     $RegistrationCount = ($TestFiles | Select-String -Pattern '^IMPLEMENT_(SIMPLE|COMPLEX)_AUTOMATION_TEST\(').Count
-    if ($RegistrationCount -ne 40) {
-        throw "Expected 40 Automation registrations, found $RegistrationCount"
+    if ($RegistrationCount -ne 41) {
+        throw "Expected 41 Automation registrations, found $RegistrationCount"
     }
     Write-Output "Automation registrations: $RegistrationCount"
 
@@ -71,6 +71,12 @@ try {
         @{ Path = "Vector/Source/Vector/Private/VectorHUD.cpp"; Text = "GetActiveModuleName" },
         @{ Path = "Vector/Source/Vector/Private/Boss/VectorPhysicsBoss.cpp"; Text = "QueueDirectionalVelocityOverride" },
         @{ Path = "Vector/Source/Vector/Private/Boss/VectorPhysicsBoss.cpp"; Text = "Boss slam landed" },
+        @{ Path = "Vector/Source/Vector/Private/Boss/VectorPhysicsBoss.cpp"; Text = "Boss aerial burst released" },
+        @{ Path = "Vector/Source/Vector/Private/Boss/VectorPhysicsBoss.cpp"; Text = "Boss ammo arc launch" },
+        @{ Path = "Vector/Source/Vector/Private/PCG/VectorTacticalLayout.cpp"; Text = "route can collapse to one height layer" },
+        @{ Path = "Tools/Greybox/setup_tactical_pcg_preview.py"; Text = "spawn_staircase_x" },
+        @{ Path = "Vector/Source/Vector/Private/Combat/VectorEnemy.cpp"; Text = "Enemy fell out of world" },
+        @{ Path = "Vector/Source/Vector/Private/Hunt/VectorEncounterComponent.cpp"; Text = "recovery=COUNTED" },
         @{ Path = "Vector/Source/Vector/Private/Combat/VectorImpactCollisionComponent.cpp"; Text = "EVectorKillCause::BossRam" },
         @{ Path = "Vector/Source/Vector/Private/Gameplay/VectorCharacterMovementComponent.cpp"; Text = "OnLandedWithImpact" },
         @{ Path = "Tools/Greybox/setup_physics_boss_test.py"; Text = "/Script/Vector.VectorPhysicsBoss" }

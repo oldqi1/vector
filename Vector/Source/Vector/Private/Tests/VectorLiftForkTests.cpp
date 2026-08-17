@@ -29,4 +29,28 @@ bool FVectorLiftForkMassScalingTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FVectorBallisticArcTest,
+	"Vector.Combat.BallisticArc.ReachesLocked3DPoint",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FVectorBallisticArcTest::RunTest(const FString& Parameters)
+{
+	const FVector Start(0.0, 0.0, 100.0);
+	const FVector Target(1200.0, 400.0, 500.0);
+	FVector LaunchVelocity = FVector::ZeroVector;
+	TestTrue(TEXT("Valid 3D ballistic arc solves"),
+		FVectorImpactMath::ComputeBallisticLaunchVelocity(
+			Start, Target, 1.2, -980.0, LaunchVelocity));
+	const FVector Reached = FVectorImpactMath::SampleBallisticPosition(
+		Start, LaunchVelocity, -980.0, 1.2);
+	TestTrue(TEXT("Ballistic sample reaches locked elevated point"),
+		Reached.Equals(Target, 1.e-6));
+	TestTrue(TEXT("Arc has positive launch height"), LaunchVelocity.Z > 0.0);
+	TestFalse(TEXT("Zero flight time is rejected"),
+		FVectorImpactMath::ComputeBallisticLaunchVelocity(
+			Start, Target, 0.0, -980.0, LaunchVelocity));
+	return true;
+}
+
 #endif

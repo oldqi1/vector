@@ -3,6 +3,7 @@
 #include "Combat/VectorCombatTargeting.h"
 
 #include "Combat/VectorHealthComponent.h"
+#include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
@@ -30,21 +31,20 @@ namespace
 			return nullptr;
 		}
 
-		TArray<FHitResult> Hits;
+		TArray<FOverlapResult> Hits;
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(VectorCombatTargeting), false, Owner);
 		const FVector AimDirection = Direction.GetSafeNormal2D();
-		World->SweepMultiByObjectType(
+		World->OverlapMultiByObjectType(
 			Hits,
 			Owner->GetActorLocation(),
-			Owner->GetActorLocation() + AimDirection * RangeCm,
 			FQuat::Identity,
 			FCollisionObjectQueryParams(ECC_TO_BITFIELD(ECC_Pawn)),
-			FCollisionShape::MakeSphere(FMath::Max(0.0, RadiusCm)),
+			FCollisionShape::MakeSphere(FMath::Max(0.0, RangeCm)),
 			Params);
 
 		AActor* BestTarget = nullptr;
 		float BestDistanceSquared = MAX_FLT;
-		for (const FHitResult& Hit : Hits)
+		for (const FOverlapResult& Hit : Hits)
 		{
 			AActor* Candidate = Hit.GetActor();
 			if (!Candidate || Candidate == Owner || !IsValidTarget(Candidate))
@@ -57,7 +57,15 @@ namespace
 				continue;
 			}
 			const FVector ToCandidate = Candidate->GetActorLocation() - Owner->GetActorLocation();
-			if (FVector::DotProduct(ToCandidate.GetSafeNormal2D(), AimDirection) <= 0.0)
+			if (ToCandidate.SizeSquared() > FMath::Square(RangeCm))
+			{
+				continue;
+			}
+			const FVector PlanarToCandidate = FVector::VectorPlaneProject(
+				ToCandidate, FVector::UpVector);
+			const double ForwardDistance = FVector::DotProduct(PlanarToCandidate, AimDirection);
+			const double LateralDistance = (PlanarToCandidate - AimDirection * ForwardDistance).Size();
+			if (ForwardDistance <= 0.0 || LateralDistance > RadiusCm)
 			{
 				continue;
 			}
@@ -69,7 +77,7 @@ namespace
 			{
 				continue;
 			}
-			const float CandidateDistanceSquared = static_cast<float>(ToCandidate.SizeSquared2D());
+			const float CandidateDistanceSquared = static_cast<float>(ToCandidate.SizeSquared());
 			if (CandidateDistanceSquared < BestDistanceSquared)
 			{
 				BestDistanceSquared = CandidateDistanceSquared;
@@ -97,21 +105,20 @@ namespace
 
 		const FVector Start = Owner->GetActorLocation();
 		const FVector AimDirection = Direction.GetSafeNormal2D();
-		TArray<FHitResult> Hits;
+		TArray<FOverlapResult> Hits;
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(VectorCombatAlignedTargeting), false, Owner);
-		World->SweepMultiByObjectType(
+		World->OverlapMultiByObjectType(
 			Hits,
 			Start,
-			Start + AimDirection * RangeCm,
 			FQuat::Identity,
 			FCollisionObjectQueryParams(ECC_TO_BITFIELD(ECC_Pawn)),
-			FCollisionShape::MakeSphere(FMath::Max(0.0, RadiusCm)),
+			FCollisionShape::MakeSphere(FMath::Max(0.0, RangeCm)),
 			Params);
 
 		AActor* BestTarget = nullptr;
 		double BestLateralDistanceSquared = TNumericLimits<double>::Max();
 		double BestForwardDistance = TNumericLimits<double>::Max();
-		for (const FHitResult& Hit : Hits)
+		for (const FOverlapResult& Hit : Hits)
 		{
 			AActor* Candidate = Hit.GetActor();
 			if (!Candidate || Candidate == Owner || !IsValidTarget(Candidate))
@@ -124,8 +131,13 @@ namespace
 				continue;
 			}
 
+			const FVector SpatialToCandidate = Candidate->GetActorLocation() - Start;
+			if (SpatialToCandidate.SizeSquared() > FMath::Square(RangeCm))
+			{
+				continue;
+			}
 			const FVector ToCandidate = FVector::VectorPlaneProject(
-				Candidate->GetActorLocation() - Start, FVector::UpVector);
+				SpatialToCandidate, FVector::UpVector);
 			const double ForwardDistance = FVector::DotProduct(ToCandidate, AimDirection);
 			if (ForwardDistance <= 0.0 || ForwardDistance > RangeCm
 				|| !FVectorCombatTargeting::HasUnobstructedLine(Owner, Candidate))

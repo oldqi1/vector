@@ -35,6 +35,22 @@ namespace FVectorGravityHookMath
 			(PositionA.Z + PositionB.Z) * 0.5);
 	}
 
+	/** Full 3D center of mass used by spatial tethers and elevated modules. */
+	inline FVector ComputeSpatialCenterOfMass(
+		const FVector& PositionA,
+		const FVector& PositionB,
+		const double MassA,
+		const double MassB)
+	{
+		if (!IsFiniteVector(PositionA) || !IsFiniteVector(PositionB)
+			|| !FMath::IsFinite(MassA) || !FMath::IsFinite(MassB)
+			|| MassA <= 0.0 || MassB <= 0.0)
+		{
+			return FVector::ZeroVector;
+		}
+		return (PositionA * MassA + PositionB * MassB) / (MassA + MassB);
+	}
+
 	/** 相对运动绕共同质心的单位质量角动量 h = (r × vRel).Z。 */
 	inline double ComputePlanarSpecificAngularMomentum(
 		const FVector& PositionA,
@@ -52,6 +68,21 @@ namespace FVectorGravityHookMath
 		const FVector RelativeVelocity = FVector::VectorPlaneProject(
 			VelocityB - VelocityA, FVector::UpVector);
 		return FVector::CrossProduct(Separation, RelativeVelocity).Z;
+	}
+
+	/** Specific angular-momentum vector h = r x vRel for a spatial pair. */
+	inline FVector ComputeSpatialSpecificAngularMomentum(
+		const FVector& PositionA,
+		const FVector& PositionB,
+		const FVector& VelocityA,
+		const FVector& VelocityB)
+	{
+		if (!IsFiniteVector(PositionA) || !IsFiniteVector(PositionB)
+			|| !IsFiniteVector(VelocityA) || !IsFiniteVector(VelocityB))
+		{
+			return FVector::ZeroVector;
+		}
+		return FVector::CrossProduct(PositionB - PositionA, VelocityB - VelocityA);
 	}
 
 	/**
@@ -72,7 +103,7 @@ namespace FVectorGravityHookMath
 		const double ReelSpeedCmPerSecond,
 		const double ConstraintToleranceCm,
 		const double DeltaTimeSeconds,
-		const double SpecificAngularMomentumCm2PerSecond,
+		const FVector& SpecificAngularMomentumCm2PerSecond,
 		const double MaxRelativeTangentialSpeedCmPerSecond,
 		const double MaxCorrectionSpeedCmPerSecond,
 		FVector& OutVelocityA,
@@ -89,7 +120,7 @@ namespace FVectorGravityHookMath
 			|| !FMath::IsFinite(ReelSpeedCmPerSecond)
 			|| !FMath::IsFinite(ConstraintToleranceCm)
 			|| !FMath::IsFinite(DeltaTimeSeconds)
-			|| !FMath::IsFinite(SpecificAngularMomentumCm2PerSecond)
+			|| !IsFiniteVector(SpecificAngularMomentumCm2PerSecond)
 			|| !FMath::IsFinite(MaxRelativeTangentialSpeedCmPerSecond)
 			|| !FMath::IsFinite(MaxCorrectionSpeedCmPerSecond)
 			|| MassA <= 0.0 || MassB <= 0.0)
@@ -97,8 +128,7 @@ namespace FVectorGravityHookMath
 			return false;
 		}
 
-		const FVector Separation = FVector::VectorPlaneProject(
-			PositionB - PositionA, FVector::UpVector);
+		const FVector Separation = PositionB - PositionA;
 		const double Distance = Separation.Size();
 		if (Distance <= UE_SMALL_NUMBER)
 		{
@@ -118,9 +148,7 @@ namespace FVectorGravityHookMath
 
 		bOutTaut = true;
 		const FVector Radial = Separation / Distance;
-		const FVector Tangent(-Radial.Y, Radial.X, 0.0);
-		const FVector CurrentRelativeVelocity = FVector::VectorPlaneProject(
-			VelocityB - VelocityA, FVector::UpVector);
+		const FVector CurrentRelativeVelocity = VelocityB - VelocityA;
 		const double CurrentRadialSeparationSpeed = FVector::DotProduct(
 			CurrentRelativeVelocity, Radial);
 		const double StretchCm = FMath::Max(0.0, Distance - SafeCableLength);
@@ -132,24 +160,21 @@ namespace FVectorGravityHookMath
 		const double DesiredRadialSeparationSpeed = FMath::Min(
 			CurrentRadialSeparationSpeed,
 			-FMath::Max(0.0, ReelSpeedCmPerSecond) - CorrectionSpeed);
-		const double RelativeTangentialSpeed = FMath::Clamp(
-			SpecificAngularMomentumCm2PerSecond / Distance,
-			-FMath::Max(0.0, MaxRelativeTangentialSpeedCmPerSecond),
+		const FVector RelativeTangentialVelocity =
+			FVector::CrossProduct(SpecificAngularMomentumCm2PerSecond, Separation)
+			/ FMath::Square(Distance);
+		const FVector LimitedTangentialVelocity = RelativeTangentialVelocity.GetClampedToMaxSize(
 			FMath::Max(0.0, MaxRelativeTangentialSpeedCmPerSecond));
 		const FVector DesiredRelativeVelocity =
-			Radial * DesiredRadialSeparationSpeed + Tangent * RelativeTangentialSpeed;
+			Radial * DesiredRadialSeparationSpeed + LimitedTangentialVelocity;
 
 		const double TotalMass = MassA + MassB;
-		const FVector PlanarVelocityA = FVector::VectorPlaneProject(VelocityA, FVector::UpVector);
-		const FVector PlanarVelocityB = FVector::VectorPlaneProject(VelocityB, FVector::UpVector);
 		const FVector CenterOfMassVelocity =
-			(PlanarVelocityA * MassA + PlanarVelocityB * MassB) / TotalMass;
+			(VelocityA * MassA + VelocityB * MassB) / TotalMass;
 		OutVelocityA = CenterOfMassVelocity
 			- DesiredRelativeVelocity * (MassB / TotalMass);
 		OutVelocityB = CenterOfMassVelocity
 			+ DesiredRelativeVelocity * (MassA / TotalMass);
-		OutVelocityA.Z = VelocityA.Z;
-		OutVelocityB.Z = VelocityB.Z;
 		return IsFiniteVector(OutVelocityA) && IsFiniteVector(OutVelocityB);
 	}
 

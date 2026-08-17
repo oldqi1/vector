@@ -35,6 +35,8 @@ struct VECTOR_API FVectorTacticalModuleDefinition
 	EVectorTacticalModuleType Type = EVectorTacticalModuleType::SafeStart;
 	EVectorPhysicsOpportunity Opportunities = EVectorPhysicsOpportunity::None;
 	int32 EnemyBudget = 0;
+	int32 HeightLayerCount = 1;
+	double MaximumHeightDifferenceCm = 0.0;
 
 	int32 CountOpportunities() const;
 	bool HasOpportunity(EVectorPhysicsOpportunity Opportunity) const;
@@ -61,6 +63,8 @@ struct VECTOR_API FVectorTacticalLayout
 	TArray<FVectorTacticalModuleDefinition> Modules;
 
 	bool HasOpportunity(EVectorPhysicsOpportunity Opportunity) const;
+	int32 GetMaximumHeightLayerCount() const;
+	double GetMaximumHeightDifferenceCm() const;
 	FString DescribeModuleSequence() const;
 	FString Describe() const;
 };

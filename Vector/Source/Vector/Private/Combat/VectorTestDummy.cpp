@@ -8,6 +8,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "DrawDebugHelpers.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "Gameplay/VectorCharacterMovementComponent.h"
@@ -96,12 +97,49 @@ void AVectorTestDummy::BeginPlay()
 void AVectorTestDummy::Tick(const float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	const double SafeDeltaSeconds = FMath::Max(0.0f, DeltaSeconds);
 	if (LiftForkFlashSecondsRemaining > 0.0)
 	{
 		LiftForkFlashSecondsRemaining = FMath::Max(
-			0.0, LiftForkFlashSecondsRemaining - FMath::Max(0.0f, DeltaSeconds));
+			0.0, LiftForkFlashSecondsRemaining - SafeDeltaSeconds);
 		const double Ratio = FMath::Clamp(LiftForkFlashSecondsRemaining / 0.45, 0.0, 1.0);
 		LiftForkLight->SetIntensity(static_cast<float>(7000.0 * Ratio));
+	}
+	if (LiftForkTraceSecondsRemaining > 0.0)
+	{
+		LiftForkTraceSecondsRemaining = FMath::Max(
+			0.0, LiftForkTraceSecondsRemaining - SafeDeltaSeconds);
+		const double HeightCm = FMath::Max(0.0, GetActorLocation().Z - LiftForkStartLocation.Z);
+		LiftForkPeakHeightCm = FMath::Max(LiftForkPeakHeightCm, HeightCm);
+		if (LiftForkFlashSecondsRemaining <= 0.0 && LiftForkLight)
+		{
+			const UCharacterMovementComponent* Movement = GetCharacterMovement();
+			LiftForkLight->SetIntensity(Movement && Movement->IsFalling() ? 2600.0f : 0.0f);
+		}
+		if (GetWorld())
+		{
+			DrawDebugLine(GetWorld(), LiftForkStartLocation, GetActorLocation(),
+				FColor::Yellow, false, 0.05f, 0, 5.0f);
+			DrawDebugSphere(GetWorld(), GetActorLocation(), 24.0f, 12,
+				FColor::Yellow, false, 0.05f, 0, 3.0f);
+		}
+
+		if (!bLiftForkDiagnosticSampled)
+		{
+			LiftForkDiagnosticDelaySecondsRemaining -= SafeDeltaSeconds;
+			if (LiftForkDiagnosticDelaySecondsRemaining <= 0.0)
+			{
+				bLiftForkDiagnosticSampled = true;
+				const UCharacterMovementComponent* Movement = GetCharacterMovement();
+				const double VerticalVelocity = Movement ? Movement->Velocity.Z : 0.0;
+				const bool bLiftVerified = HeightCm >= 25.0 || VerticalVelocity >= 100.0;
+				UE_LOG(LogVectorPresentation, Log,
+					TEXT("Lift verification: actor=%s deltaZ=%.1f peakZ=%.1f velocityZ=%.1f mode=%s check=%s"),
+					*GetName(), HeightCm, LiftForkPeakHeightCm, VerticalVelocity,
+					Movement ? *Movement->GetMovementName() : TEXT("(none)"),
+					bLiftVerified ? TEXT("PASS") : TEXT("FAIL"));
+			}
+		}
 	}
 	UpdateStaggerPresentation();
 }
@@ -109,6 +147,11 @@ void AVectorTestDummy::Tick(const float DeltaSeconds)
 void AVectorTestDummy::TriggerLiftForkPresentation()
 {
 	LiftForkFlashSecondsRemaining = 0.45;
+	LiftForkTraceSecondsRemaining = 4.0;
+	LiftForkDiagnosticDelaySecondsRemaining = 0.12;
+	LiftForkStartLocation = GetActorLocation();
+	LiftForkPeakHeightCm = 0.0;
+	bLiftForkDiagnosticSampled = false;
 	if (LiftForkLight)
 	{
 		LiftForkLight->SetIntensity(7000.0f);
@@ -125,16 +168,22 @@ void AVectorTestDummy::UpdateStaggerPresentation()
 	// 稳定度状态 → 表现（灰盒期用旋转+颜色表达失衡/倒地）：
 	// Stable/Rising = 直立原色；Unbalanced = 白色闪亮；Downed = 躺平（绕 X 旋转 90°）+ 暗色。
 	const EVectorStabilityState State = StabilityComponent->GetState();
+	const double LiftHeightCm = LiftForkTraceSecondsRemaining > 0.0
+		? FMath::Max(0.0, GetActorLocation().Z - LiftForkStartLocation.Z)
+		: 0.0;
+	const float LiftReadabilityScale = 1.0f + 0.30f * static_cast<float>(
+		FMath::Clamp(LiftHeightCm / 250.0, 0.0, 1.0));
 	float WarningPulseAlpha = 0.0f;
 	if (bAttackWarningActive)
 	{
 		const double TimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 		WarningPulseAlpha = 0.5f + 0.5f * FMath::Sin(static_cast<float>(TimeSeconds * UE_TWO_PI * 8.0));
-		BodyMesh->SetRelativeScale3D(BaseBodyScale * (1.08f + 0.12f * WarningPulseAlpha));
+		BodyMesh->SetRelativeScale3D(BaseBodyScale
+			* FMath::Max(LiftReadabilityScale, 1.08f + 0.12f * WarningPulseAlpha));
 	}
 	else
 	{
-		BodyMesh->SetRelativeScale3D(BaseBodyScale);
+		BodyMesh->SetRelativeScale3D(BaseBodyScale * LiftReadabilityScale);
 	}
 	if (AttackWarningLight)
 	{

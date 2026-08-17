@@ -227,3 +227,16 @@ bool AVectorEnemy::ShouldPauseAI() const
 	}
 	return false;
 }
+
+void AVectorEnemy::FellOutOfWorld(const UDamageType& DamageType)
+{
+	if (HealthComponent && !HealthComponent->IsDead())
+	{
+		UE_LOG(LogVectorEnemy, Log,
+			TEXT("Enemy fell out of world: enemy=%s location=%s health=%.1f action=LETHAL_DAMAGE"),
+			*GetName(), *GetActorLocation().ToCompactString(), HealthComponent->GetHealth());
+		HealthComponent->ApplyDamage(FMath::Max(1.0, HealthComponent->GetHealth()));
+		return;
+	}
+	Super::FellOutOfWorld(DamageType);
+}

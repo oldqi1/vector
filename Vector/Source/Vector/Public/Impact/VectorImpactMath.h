@@ -16,6 +16,21 @@ struct VECTOR_API FVectorImpactMath
 	/** 把速度/冲量强度按统一有效质量换算为目标速度；非法输入返回零。 */
 	static double ComputeMassAdjustedSpeed(double BaseSpeedCmPerSecond, double EffectiveMass);
 
+	/** Solve the initial world velocity that reaches Target after FlightSeconds. */
+	static bool ComputeBallisticLaunchVelocity(
+		const FVector& Start,
+		const FVector& Target,
+		double FlightSeconds,
+		double GravityZCmPerSecondSquared,
+		FVector& OutVelocity);
+
+	/** Deterministic ballistic sample used by runtime telegraphs and tests. */
+	static FVector SampleBallisticPosition(
+		const FVector& Start,
+		const FVector& InitialVelocity,
+		double GravityZCmPerSecondSquared,
+		double TimeSeconds);
+
 	/**
 	 * 计算沿给定水平碰撞方向的闭合速度，不设上限。
 	 * Direction 指向“撞击者 → 被撞者”；双方正在分离时返回 0。

@@ -97,4 +97,9 @@ protected:
 	bool bLubricatedPresentation = false;
 	bool bBuoyantPresentation = false;
 	double LiftForkFlashSecondsRemaining = 0.0;
+	double LiftForkTraceSecondsRemaining = 0.0;
+	double LiftForkDiagnosticDelaySecondsRemaining = 0.0;
+	double LiftForkPeakHeightCm = 0.0;
+	FVector LiftForkStartLocation = FVector::ZeroVector;
+	bool bLiftForkDiagnosticSampled = false;
 };

@@ -71,6 +71,14 @@ bool FVectorPhysicsBossPhaseOutputTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Overload attacks more often"), State.GetRamIntervalSeconds() < AnchoredRam);
 	TestTrue(TEXT("Overload recovery is more punishable"), State.GetRecoverySeconds() > AnchoredRecovery);
 	TestFalse(TEXT("Zero add cap rejects spawn"), State.CanSpawnAdd(0));
+	TestEqual(TEXT("Overload begins by weaponizing a live add"),
+		State.SelectAttack(0, true), EVectorPhysicsBossAttack::AmmoLaunch);
+	TestEqual(TEXT("Missing ammo falls back to a physical aerial burst"),
+		State.SelectAttack(0, false), EVectorPhysicsBossAttack::AerialBurst);
+	TestEqual(TEXT("Overload pattern retains the readable ram"),
+		State.SelectAttack(1, true), EVectorPhysicsBossAttack::Ram);
+	TestEqual(TEXT("Overload pattern retains the landing slam"),
+		State.SelectAttack(2, true), EVectorPhysicsBossAttack::Slam);
 	return true;
 }
 

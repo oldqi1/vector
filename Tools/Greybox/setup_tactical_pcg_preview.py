@@ -85,6 +85,26 @@ def spawn_boundary(center_x, half_x=1200.0, half_y=1100.0):
                (half_x / 50.0, 1.0, 3.5), "BoundarySouth")
 
 
+def spawn_staircase_x(start_x, center_y, direction, step_count,
+                      step_height=40.0, step_depth=100.0,
+                      width=500.0, base_z=0.0, label="Stair"):
+    """Build nav-friendly physical steps instead of a decorative ramp.
+
+    Each step is a solid column and rises no more than the default Character
+    step height. The resulting upper deck is therefore gameplay geometry, not
+    an unreachable visual layer.
+    """
+    for index in range(step_count):
+        top_z = base_z + (index + 1) * step_height
+        step_x = start_x + direction * (index + 0.5) * step_depth
+        spawn_cube(
+            (step_x, center_y, (base_z + top_z) * 0.5),
+            (step_depth / 100.0, width / 100.0,
+             (top_z - base_z) / 100.0),
+            "%s_%02d" % (label, index),
+        )
+
+
 def build_safe_start(center_x, target_point_class, player_start_class):
     spawn_floor(center_x, 1800.0, 1800.0, "SafeStart_Floor")
     spawn_boundary(center_x, 900.0, 900.0)
@@ -102,12 +122,18 @@ def build_open_bowl(center_x, target_point_class):
     spawn_boundary(center_x)
     spawn_cube((center_x + 1050.0, 0.0, 125.0),
                (1.0, 22.0, 3.5), "OpenBowl_ImpactWall")
+    # Two real height layers: the east deck receives launched enemies while
+    # the west floor remains a recovery/hammer lane.
+    spawn_cube((center_x + 500.0, 0.0, 100.0),
+               (8.0, 10.0, 2.5), "OpenBowl_UpperDeck")
+    spawn_staircase_x(center_x - 200.0, 0.0, 1.0, 6,
+                      label="OpenBowl_DeckStair")
     markers = []
-    offsets = ((-750, -550), (-750, 550), (-400, 0), (-50, -500),
-               (-50, 500), (350, -250), (350, 300), (700, 0))
+    offsets = ((-750, -550, 80), (-750, 550, 80), (-500, 0, 80), (-250, -500, 80),
+               (250, -300, 330), (250, 300, 330), (600, -300, 330), (600, 300, 330))
     for index, offset in enumerate(offsets):
         markers.append(spawn_marker(
-            target_point_class, (center_x + offset[0], offset[1], 80.0),
+            target_point_class, (center_x + offset[0], offset[1], offset[2]),
             "OpenBowl_Enemy_%02d" % index))
     ENCOUNTER_WAVES.append(markers)
 
@@ -117,13 +143,17 @@ def build_hard_lane(center_x, target_point_class):
     spawn_cube((center_x, 500.0, 125.0), (24.0, 1.0, 3.5), "HardLane_WallNorth")
     spawn_cube((center_x, -500.0, 125.0), (24.0, 1.0, 3.5), "HardLane_WallSouth")
     spawn_cube((center_x + 1150.0, 0.0, 125.0), (1.0, 11.0, 3.5), "HardLane_Receiver")
-    spawn_cube((center_x - 900.0, 0.0, 75.0), (4.0, 8.0, 1.5), "HardLane_LaunchShelf")
+    spawn_cube((center_x + 350.0, 250.0, 160.0),
+               (11.0, 4.0, 3.6), "HardLane_UpperLane")
+    spawn_staircase_x(center_x - 850.0, 250.0, 1.0, 8,
+                      label="HardLane_UpperStair")
     markers = []
-    offsets = ((-850, -260), (-850, 260), (-500, 0), (-150, -260),
-               (-150, 260), (250, 0), (600, -250), (600, 250))
+    offsets = ((-850, -260, 80), (-700, 250, 400), (-500, -100, 80),
+               (-150, -260, 80), (-50, 250, 400), (300, -150, 80),
+               (550, 250, 400), (750, -250, 80))
     for index, offset in enumerate(offsets):
         markers.append(spawn_marker(
-            target_point_class, (center_x + offset[0], offset[1], 120.0),
+            target_point_class, (center_x + offset[0], offset[1], offset[2]),
             "HardLane_Enemy_%02d" % index))
     ENCOUNTER_WAVES.append(markers)
 
@@ -131,12 +161,18 @@ def build_hard_lane(center_x, target_point_class):
 def build_height_shelf(center_x, target_point_class):
     spawn_floor(center_x, suffix="HeightShelf_Floor")
     spawn_boundary(center_x)
-    spawn_cube((center_x + 500.0, 0.0, 175.0), (10.0, 18.0, 3.0), "HeightShelf_Upper")
-    spawn_cube((center_x - 50.0, 0.0, 25.0), (1.5, 18.0, 1.0), "HeightShelf_Step1")
-    spawn_cube((center_x + 100.0, 0.0, 75.0), (1.5, 18.0, 2.0), "HeightShelf_Step2")
+    spawn_cube((center_x + 650.0, 0.0, 250.0),
+               (9.0, 18.0, 5.5), "HeightShelf_Upper")
+    spawn_cube((center_x - 50.0, 0.0, 100.0),
+               (4.0, 18.0, 2.5), "HeightShelf_Middle")
+    spawn_staircase_x(center_x - 850.0, -450.0, 1.0, 5,
+                      label="HeightShelf_LowerStair")
+    spawn_staircase_x(center_x - 50.0, 450.0, 1.0, 8,
+                      base_z=200.0,
+                      label="HeightShelf_UpperStair")
     spawn_cube((center_x - 1050.0, 0.0, 125.0), (1.0, 22.0, 3.5), "HeightShelf_Receiver")
     markers = []
-    offsets = ((450, -600, 380), (450, -200, 380), (450, 250, 380), (450, 650, 380),
+    offsets = ((450, -600, 650), (450, -200, 650), (650, 250, 650), (650, 650, 650),
                (-700, -600, 80), (-700, -200, 80), (-700, 250, 80), (-700, 650, 80))
     for index, offset in enumerate(offsets):
         markers.append(spawn_marker(
@@ -150,17 +186,21 @@ def build_slick_cross(center_x, target_point_class, friction_class):
     spawn_boundary(center_x)
     spawn_cube((center_x, 0.0, -42.0), (18.0, 5.0, 0.12), "SlickCross_MarkerX")
     spawn_cube((center_x, 0.0, -40.0), (5.0, 18.0, 0.12), "SlickCross_MarkerY")
+    spawn_cube((center_x + 650.0, 650.0, 125.0),
+               (7.0, 7.0, 3.0), "SlickCross_UpperDeck")
+    spawn_staircase_x(center_x - 100.0, 650.0, 1.0, 7,
+                      label="SlickCross_UpperStair")
     zone = subsystem().spawn_actor_from_class(
         friction_class, unreal.Vector(center_x, 0.0, 100.0))
     if zone is None:
         raise RuntimeError("failed to spawn low-friction zone")
     zone.set_actor_label(PREFIX + "SlickCross_LowFrictionZone")
     markers = []
-    offsets = ((-700, 0), (-450, -450), (-450, 450), (0, -700),
-               (0, 700), (450, -450), (450, 450), (700, 0))
+    offsets = ((-700, 0, 80), (-450, -450, 80), (-450, 450, 80), (0, -700, 80),
+               (250, 550, 360), (500, 750, 360), (750, 550, 360), (700, -200, 80))
     for index, offset in enumerate(offsets):
         markers.append(spawn_marker(
-            target_point_class, (center_x + offset[0], offset[1], 80.0),
+            target_point_class, (center_x + offset[0], offset[1], offset[2]),
             "SlickCross_Enemy_%02d" % index))
     ENCOUNTER_WAVES.append(markers)
 
@@ -172,12 +212,21 @@ def build_boss_ring(center_x, target_point_class, friction_class):
     for index, offset in enumerate(((-1350, -1250), (-1350, 1250), (1350, -1250), (1350, 1250))):
         spawn_cube((center_x + offset[0], offset[1], 175.0),
                    (2.5, 2.5, 4.5), "BossRing_Pillar_%02d" % index)
-    spawn_cube((center_x, 1150.0, 125.0), (8.0, 4.0, 3.5), "BossRing_HeightShelf")
+    # Three layers make the Boss' ballistic add attack and landing shock
+    # interact with actual traversal: basin, middle deck, high launch terrace.
+    spawn_cube((center_x, 1150.0, 175.0),
+               (10.0, 4.0, 4.0), "BossRing_MiddleShelf")
+    spawn_cube((center_x, -1150.0, 300.0),
+               (10.0, 4.0, 6.5), "BossRing_HighShelf")
+    spawn_staircase_x(center_x - 900.0, 1150.0, 1.0, 9,
+                      label="BossRing_MiddleStair")
+    spawn_staircase_x(center_x - 1100.0, -1150.0, 1.0, 15,
+                      label="BossRing_HighStair")
     BOSS_SPAWN_POINT = spawn_marker(
         target_point_class, (center_x, 0.0, 100.0), "BossRing_BossSpawn")
     BOSS_ADD_SPAWN_POINTS = [
-        spawn_marker(target_point_class, (center_x - 650.0, -450.0, 80.0), "BossRing_AddSpawn_A"),
-        spawn_marker(target_point_class, (center_x + 650.0, 450.0, 80.0), "BossRing_AddSpawn_B"),
+        spawn_marker(target_point_class, (center_x - 350.0, 1150.0, 450.0), "BossRing_AddSpawn_A"),
+        spawn_marker(target_point_class, (center_x + 350.0, -1150.0, 700.0), "BossRing_AddSpawn_B"),
     ]
     BOSS_OVERLOAD_FRICTION_ZONE = subsystem().spawn_actor_from_class(
         friction_class, unreal.Vector(center_x, 0.0, 100.0))

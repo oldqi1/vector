@@ -218,7 +218,7 @@ void UVectorGravityHookComponent::CancelHook()
 	PairReelPauseSecondsRemaining = 0.0;
 	PairCableLengthCm = 0.0;
 	CooldownSecondsRemaining = 0.0;
-	PairSpecificAngularMomentum = 0.0;
+	PairSpecificAngularMomentum = FVector::ZeroVector;
 	DiagnosticLogSecondsRemaining = 0.0;
 	bPairImpactSeen = false;
 	Timeline.Reset();
@@ -323,7 +323,7 @@ bool UVectorGravityHookComponent::TryBeginPair(AActor* Target)
 	{
 		return false;
 	}
-	const double Distance = FVector::Dist2D(
+	const double Distance = FVector::Dist(
 		First->GetActorLocation(), Target->GetActorLocation());
 	if (Distance <= UE_SMALL_NUMBER || Distance > MaximumPairDistanceCm
 		|| !FVectorCombatTargeting::HasUnobstructedLine(First, Target))
@@ -353,7 +353,7 @@ bool UVectorGravityHookComponent::TryBeginPair(AActor* Target)
 	PairReelPauseSecondsRemaining = 0.0;
 	PairCableLengthCm = Distance;
 	bPairImpactSeen = false;
-	PairSpecificAngularMomentum = FVectorGravityHookMath::ComputePlanarSpecificAngularMomentum(
+	PairSpecificAngularMomentum = FVectorGravityHookMath::ComputeSpatialSpecificAngularMomentum(
 		First->GetActorLocation(),
 		Target->GetActorLocation(),
 		MovementA->GetEffectiveVelocityForPendingStep(),
@@ -368,7 +368,7 @@ bool UVectorGravityHookComponent::TryBeginPair(AActor* Target)
 		TEXT("Cable pair attached: first=%s(m=%.2f) second=%s(m=%.2f) distance=%.0f cable=%.0f h=%.0f hammerWindow=%.2f lifetime=%.2f"),
 		*First->GetName(), GetPhysicalMass(First),
 		*Target->GetName(), GetPhysicalMass(Target),
-		Distance, PairCableLengthCm, PairSpecificAngularMomentum,
+		Distance, PairCableLengthCm, PairSpecificAngularMomentum.Size(),
 		PairSetupSecondsRemaining, PairSecondsRemaining);
 	return true;
 }
@@ -481,7 +481,7 @@ void UVectorGravityHookComponent::UpdatePair(const float DeltaTime)
 		BreakPair(TEXT("endpoint lost or dead"));
 		return;
 	}
-	const double Distance = FVector::Dist2D(
+	const double Distance = FVector::Dist(
 		First->GetActorLocation(), Second->GetActorLocation());
 	if (Distance <= UE_SMALL_NUMBER
 		|| Distance > MaximumPairDistanceCm * 1.25
@@ -534,19 +534,19 @@ void UVectorGravityHookComponent::UpdatePair(const float DeltaTime)
 
 	const FVector VelocityA = MovementA->GetEffectiveVelocityForPendingStep();
 	const FVector VelocityB = MovementB->GetEffectiveVelocityForPendingStep();
-	const double CurrentAngularMomentum =
-		FVectorGravityHookMath::ComputePlanarSpecificAngularMomentum(
+	const FVector CurrentAngularMomentum =
+		FVectorGravityHookMath::ComputeSpatialSpecificAngularMomentum(
 			First->GetActorLocation(), Second->GetActorLocation(), VelocityA, VelocityB);
 	const bool bMeaningfulNewMomentum =
-		FMath::Abs(CurrentAngularMomentum) > FMath::Abs(PairSpecificAngularMomentum)
+		CurrentAngularMomentum.Size() > PairSpecificAngularMomentum.Size()
 			+ FMath::Max(0.0, AngularMomentumCaptureThreshold)
-		|| (CurrentAngularMomentum * PairSpecificAngularMomentum < 0.0
-			&& FMath::Abs(CurrentAngularMomentum) > FMath::Max(0.0, AngularMomentumCaptureThreshold));
+		|| (FVector::DotProduct(CurrentAngularMomentum, PairSpecificAngularMomentum) < 0.0
+			&& CurrentAngularMomentum.Size() > FMath::Max(0.0, AngularMomentumCaptureThreshold));
 	if (bMeaningfulNewMomentum)
 	{
 		UE_LOG(LogVectorGravityHook, Log,
 			TEXT("Cable captured external angular momentum: %.0f -> %.0f; wide swing %.2fs"),
-			PairSpecificAngularMomentum, CurrentAngularMomentum,
+			PairSpecificAngularMomentum.Size(), CurrentAngularMomentum.Size(),
 			HammerSwingDurationSeconds);
 		PairSpecificAngularMomentum = CurrentAngularMomentum;
 		PairSwingSecondsRemaining = FMath::Max(
@@ -603,10 +603,8 @@ void UVectorGravityHookComponent::UpdatePair(const float DeltaTime)
 		return;
 	}
 
-	const FVector MomentumBefore = FVector::VectorPlaneProject(
-		VelocityA * MassA + VelocityB * MassB, FVector::UpVector);
-	const FVector MomentumAfter = FVector::VectorPlaneProject(
-		TargetVelocityA * MassA + TargetVelocityB * MassB, FVector::UpVector);
+	const FVector MomentumBefore = VelocityA * MassA + VelocityB * MassB;
+	const FVector MomentumAfter = TargetVelocityA * MassA + TargetVelocityB * MassB;
 	const bool bMomentumPass = MomentumBefore.Equals(
 		MomentumAfter,
 		FMath::Max(0.1, MomentumBefore.Size() * 1.e-5));
@@ -621,8 +619,8 @@ void UVectorGravityHookComponent::UpdatePair(const float DeltaTime)
 			bRopeTaut ? TEXT("TAUT") : TEXT("SLACK"),
 			PairSwingSecondsRemaining > 0.0 ? TEXT("SWING")
 				: (bWinchActive ? TEXT("WINCH") : TEXT("SETUP")),
-			PairSpecificAngularMomentum,
-			FMath::RadiansToDegrees(PairSpecificAngularMomentum / FMath::Square(Distance)),
+			PairSpecificAngularMomentum.Size(),
+			FMath::RadiansToDegrees(PairSpecificAngularMomentum.Size() / FMath::Square(Distance)),
 			bMomentumPass ? TEXT("PASS") : TEXT("FAIL"));
 		DiagnosticLogSecondsRemaining = FMath::Max(0.05, DiagnosticLogIntervalSeconds);
 	}
@@ -673,7 +671,7 @@ void UVectorGravityHookComponent::BreakPair(const TCHAR* Reason)
 	PairSwingSecondsRemaining = 0.0;
 	PairReelPauseSecondsRemaining = 0.0;
 	PairCableLengthCm = 0.0;
-	PairSpecificAngularMomentum = 0.0;
+	PairSpecificAngularMomentum = FVector::ZeroVector;
 	DiagnosticLogSecondsRemaining = 0.0;
 	bPairImpactSeen = false;
 	StartCooldown();
@@ -812,7 +810,7 @@ void UVectorGravityHookComponent::DrawCableDebug() const
 		const FVector PositionB = SecondTarget->GetActorLocation();
 		DrawDebugLine(GetWorld(), PositionA + HeightOffset, PositionB + HeightOffset,
 			FColor::Magenta, false, 0.03f, 0, 7.0f);
-		const FVector CenterOfMass = FVectorGravityHookMath::ComputePlanarCenterOfMass(
+		const FVector CenterOfMass = FVectorGravityHookMath::ComputeSpatialCenterOfMass(
 			PositionA, PositionB, GetPhysicalMass(FirstTarget.Get()), GetPhysicalMass(SecondTarget.Get()));
 		DrawDebugSphere(GetWorld(), CenterOfMass + HeightOffset, 25.0f, 12,
 			FColor::Green, false, 0.03f, 0, 3.0f);

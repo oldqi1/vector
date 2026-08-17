@@ -32,13 +32,25 @@ bool FVectorGravityHookPairMomentumTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Closing speed matches reel speed"), VelocityA.X - VelocityB.X, 900.0, 1.e-6);
 	TestEqual(TEXT("Total planar momentum remains zero"), VelocityA.X + 5.0 * VelocityB.X, 0.0, 1.e-6);
 
+	bool bSpatialRopeTaut = false;
+	TestTrue(TEXT("Elevated spatial tether solves"),
+		FVectorGravityHookMath::SolveTetheredPairVelocities(
+			FVector(-300.0, 0.0, 0.0), FVector(300.0, 0.0, 800.0),
+			FVector(0.0, 0.0, -100.0), FVector(0.0, 0.0, 100.0),
+			1.0, 2.0, 1000.0, 0.0, 3.0, 1.0 / 60.0,
+			FVector::ZeroVector, 1800.0, 1800.0,
+			VelocityA, VelocityB, bSpatialRopeTaut));
+	TestTrue(TEXT("Height difference contributes to taut cable distance"), bSpatialRopeTaut);
+	TestEqual(TEXT("Spatial correction preserves vertical momentum"),
+		VelocityA.Z + 2.0 * VelocityB.Z, 100.0, 1.e-6);
+
 	bool bRopeTaut = false;
 	TestTrue(TEXT("Slack non-elastic rope solves"),
 		FVectorGravityHookMath::SolveTetheredPairVelocities(
 			FVector(-400.0, 0.0, 0.0), FVector(400.0, 0.0, 0.0),
 			FVector(-100.0, 20.0, 0.0), FVector(100.0, -20.0, 0.0),
 			1.0, 1.0, 1000.0, 0.0, 3.0, 1.0 / 60.0,
-			0.0, 1800.0, 1800.0, VelocityA, VelocityB, bRopeTaut));
+			FVector::ZeroVector, 1800.0, 1800.0, VelocityA, VelocityB, bRopeTaut));
 	TestFalse(TEXT("Rope remains slack below its length"), bRopeTaut);
 	TestEqual(TEXT("Slack rope does not alter endpoint A"), VelocityA.X, -100.0, 1.e-6);
 	TestEqual(TEXT("Slack rope does not alter endpoint B"), VelocityB.X, 100.0, 1.e-6);
@@ -48,7 +60,7 @@ bool FVectorGravityHookPairMomentumTest::RunTest(const FString& Parameters)
 			FVector(-500.0, 0.0, 0.0), FVector(500.0, 0.0, 0.0),
 			FVector(-100.0, 0.0, 0.0), FVector(100.0, 0.0, 0.0),
 			1.0, 1.0, 1000.0, 0.0, 3.0, 1.0 / 60.0,
-			0.0, 1800.0, 1800.0, VelocityA, VelocityB, bRopeTaut));
+			FVector::ZeroVector, 1800.0, 1800.0, VelocityA, VelocityB, bRopeTaut));
 	TestTrue(TEXT("Rope is taut at its maximum length"), bRopeTaut);
 	TestEqual(TEXT("Taut rope removes outward separation without rebound"),
 		VelocityB.X - VelocityA.X, 0.0, 1.e-6);
@@ -60,7 +72,7 @@ bool FVectorGravityHookPairMomentumTest::RunTest(const FString& Parameters)
 			FVector(-500.0, 0.0, 0.0), FVector(500.0, 0.0, 0.0),
 			FVector(100.0, 0.0, 0.0), FVector(-100.0, 0.0, 0.0),
 			1.0, 1.0, 1000.0, 0.0, 3.0, 1.0 / 60.0,
-			0.0, 1800.0, 1800.0, VelocityA, VelocityB, bRopeTaut));
+			FVector::ZeroVector, 1800.0, 1800.0, VelocityA, VelocityB, bRopeTaut));
 	TestEqual(TEXT("Rope never pushes inward-moving endpoints apart"),
 		VelocityA.X - VelocityB.X, 200.0, 1.e-6);
 
@@ -69,7 +81,7 @@ bool FVectorGravityHookPairMomentumTest::RunTest(const FString& Parameters)
 			FVector(-500.0, 0.0, 0.0), FVector(500.0, 0.0, 0.0),
 			FVector::ZeroVector, FVector::ZeroVector,
 			1.0, 1.0, 1000.0, 260.0, 3.0, 1.0 / 60.0,
-			0.0, 1800.0, 1800.0, VelocityA, VelocityB, bRopeTaut));
+			FVector::ZeroVector, 1800.0, 1800.0, VelocityA, VelocityB, bRopeTaut));
 	TestEqual(TEXT("Winch closes taut rope at configured speed"),
 		VelocityA.X - VelocityB.X, 260.0, 1.e-6);
 	TestEqual(TEXT("Winch preserves total momentum"),
@@ -144,7 +156,7 @@ bool FVectorGravityHookAngularMomentumTest::RunTest(const FString& Parameters)
 		FVectorGravityHookMath::SolveTetheredPairVelocities(
 			FarA, FarB, InitialVelocityA, InitialVelocityB,
 			1.0, 1.0, 800.0, 0.0, 3.0, 1.0 / 60.0,
-			SpecificAngularMomentum, 1800.0, 1800.0,
+			FVector(0.0, 0.0, SpecificAngularMomentum), 1800.0, 1800.0,
 			FarVelocityA, FarVelocityB, bTetherTaut));
 	TestTrue(TEXT("Angular tether is taut"), bTetherTaut);
 	TestEqual(TEXT("Taut tether retains angular momentum tangent speed"),

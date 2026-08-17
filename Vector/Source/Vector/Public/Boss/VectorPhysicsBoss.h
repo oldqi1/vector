@@ -57,6 +57,30 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|Slam", meta = (ClampMin = "0.1", Units = "s"))
 	double SlamMaximumAirborneSeconds = 2.5;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|AerialBurst", meta = (ClampMin = "0.01", Units = "s"))
+	double AerialBurstTelegraphSeconds = 0.9;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|AerialBurst", meta = (ClampMin = "0.0", Units = "cm"))
+	double AerialBurstRadiusCm = 650.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|AerialBurst", meta = (ClampMin = "0.0", Units = "cm/s"))
+	double AerialBurstHorizontalBaseSpeedCmPerSecond = 900.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|AerialBurst", meta = (ClampMin = "0.0", Units = "cm/s"))
+	double AerialBurstVerticalBaseSpeedCmPerSecond = 1200.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|AmmoLaunch", meta = (ClampMin = "0.01", Units = "s"))
+	double AmmoLaunchTelegraphSeconds = 0.8;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|AmmoLaunch", meta = (ClampMin = "0.0", Units = "cm"))
+	double AmmoSearchRadiusCm = 1600.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|AmmoLaunch", meta = (ClampMin = "0.1", Units = "s"))
+	double AmmoLaunchFlightSeconds = 1.2;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Vector|Boss|AmmoLaunch", meta = (ClampMin = "0.0", Units = "cm/s"))
+	double AmmoLaunchMaximumBaseSpeedCmPerSecond = 2200.0;
+
 private:
 	enum class ERamPhase : uint8
 	{
@@ -65,6 +89,8 @@ private:
 		Active,
 		SlamTelegraph,
 		SlamAirborne,
+		AerialBurstTelegraph,
+		AmmoLaunchTelegraph,
 		Recovery,
 	};
 
@@ -78,6 +104,14 @@ private:
 	void LaunchRam();
 	void BeginSlamTelegraph();
 	void LaunchSlam();
+	void BeginNextAttack();
+	void BeginAerialBurstTelegraph();
+	void ReleaseAerialBurst();
+	bool BeginAmmoLaunchTelegraph();
+	void LaunchAmmoTarget();
+	void ClearAmmoTargetPresentation();
+	AVectorEnemy* FindAmmoTarget() const;
+	bool ComputeAmmoLaunchVelocity(AVectorEnemy* AmmoTarget, FVector& OutVelocity) const;
 	void AdvanceRam(double DeltaSeconds);
 	void ApplyPhaseOutputs(EVectorPhysicsBossPhase PreviousPhase);
 	void UpdateBossPresentation();
@@ -87,5 +121,7 @@ private:
 	ERamPhase RamPhase = ERamPhase::Waiting;
 	double RamPhaseSecondsRemaining = 1.5;
 	FVector LockedRamDirection = FVector::ForwardVector;
-	bool bUseSlamForNextAttack = false;
+	int32 AttackSequenceIndex = 0;
+	TWeakObjectPtr<AVectorEnemy> LockedAmmoTarget;
+	FVector LockedAmmoAimPoint = FVector::ZeroVector;
 };

@@ -187,7 +187,7 @@ private:
 	double PairReelPauseSecondsRemaining = 0.0;
 	double PairCableLengthCm = 0.0;
 	double CooldownSecondsRemaining = 0.0;
-	double PairSpecificAngularMomentum = 0.0;
+	FVector PairSpecificAngularMomentum = FVector::ZeroVector;
 	double DiagnosticLogSecondsRemaining = 0.0;
 	bool bPairImpactSeen = false;
 	bool bOwnsActionLock = false;

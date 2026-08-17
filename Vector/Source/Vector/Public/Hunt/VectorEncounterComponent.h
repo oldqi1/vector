@@ -88,6 +88,9 @@ private:
 	UFUNCTION()
 	void HandleRegisteredEnemyDeath();
 
+	UFUNCTION()
+	void HandleRegisteredEnemyDestroyed(AActor* DestroyedActor);
+
 	void ClearEnemyBindings();
 	void CompleteEncounterIfReady();
 
@@ -104,6 +107,7 @@ private:
 	double CompletionTimeSeconds = 0.0;
 
 	TSet<TWeakObjectPtr<UVectorHealthComponent>> RegisteredHealthComponents;
+	TSet<TWeakObjectPtr<AVectorEnemy>> RegisteredEnemies;
 	bool bDynamicEncounterActive = false;
 	bool bEncounterSealed = true;
 };

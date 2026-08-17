@@ -129,6 +129,45 @@ bool FVectorPhysicsBossState::CanSpawnAdd(const int32 CurrentActiveAdds) const
 		&& FMath::Max(0, CurrentActiveAdds) < GetMaximumConcurrentAdds();
 }
 
+EVectorPhysicsBossAttack FVectorPhysicsBossState::SelectAttack(
+	const int32 SequenceIndex,
+	const bool bAmmoAvailable) const
+{
+	const int32 SafeIndex = FMath::Max(0, SequenceIndex);
+	switch (Phase)
+	{
+	case EVectorPhysicsBossPhase::AnchoredShell:
+		return EVectorPhysicsBossAttack::Ram;
+	case EVectorPhysicsBossPhase::ExposedShell:
+	{
+		constexpr EVectorPhysicsBossAttack Pattern[] =
+		{
+			EVectorPhysicsBossAttack::Ram,
+			EVectorPhysicsBossAttack::Slam,
+			EVectorPhysicsBossAttack::AerialBurst,
+		};
+		return Pattern[SafeIndex % UE_ARRAY_COUNT(Pattern)];
+	}
+	case EVectorPhysicsBossPhase::Overload:
+	{
+		constexpr EVectorPhysicsBossAttack Pattern[] =
+		{
+			EVectorPhysicsBossAttack::AmmoLaunch,
+			EVectorPhysicsBossAttack::Ram,
+			EVectorPhysicsBossAttack::Slam,
+			EVectorPhysicsBossAttack::AerialBurst,
+		};
+		const EVectorPhysicsBossAttack Selected = Pattern[SafeIndex % UE_ARRAY_COUNT(Pattern)];
+		return Selected == EVectorPhysicsBossAttack::AmmoLaunch && !bAmmoAvailable
+			? EVectorPhysicsBossAttack::AerialBurst
+			: Selected;
+	}
+	case EVectorPhysicsBossPhase::Defeated:
+	default:
+		return EVectorPhysicsBossAttack::None;
+	}
+}
+
 FString FVectorPhysicsBossState::Describe() const
 {
 	return FString::Printf(

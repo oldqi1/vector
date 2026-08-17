@@ -122,7 +122,9 @@ bool UVectorEncounterComponent::RegisterSpawnedEnemy(AVectorEnemy* Enemy)
 	UVectorHealthComponent* Health = Enemy
 		? Enemy->FindComponentByClass<UVectorHealthComponent>()
 		: nullptr;
-	if (!Health || Health->IsDead() || RegisteredHealthComponents.Contains(Health))
+	const TWeakObjectPtr<AVectorEnemy> WeakEnemy(Enemy);
+	if (!Health || Health->IsDead() || RegisteredHealthComponents.Contains(Health)
+		|| RegisteredEnemies.Contains(WeakEnemy))
 	{
 		return false;
 	}
@@ -131,7 +133,10 @@ bool UVectorEncounterComponent::RegisterSpawnedEnemy(AVectorEnemy* Enemy)
 		return false;
 	}
 	RegisteredHealthComponents.Add(Health);
+	RegisteredEnemies.Add(Enemy);
 	Health->OnDeath.AddUniqueDynamic(this, &UVectorEncounterComponent::HandleRegisteredEnemyDeath);
+	Enemy->OnDestroyed.AddUniqueDynamic(
+		this, &UVectorEncounterComponent::HandleRegisteredEnemyDestroyed);
 	return true;
 }
 
@@ -190,7 +195,10 @@ void UVectorEncounterComponent::RegisterExistingEnemies()
 		}
 
 		RegisteredHealthComponents.Add(Health);
+		RegisteredEnemies.Add(Enemy);
 		Health->OnDeath.AddUniqueDynamic(this, &UVectorEncounterComponent::HandleRegisteredEnemyDeath);
+		Enemy->OnDestroyed.AddUniqueDynamic(
+			this, &UVectorEncounterComponent::HandleRegisteredEnemyDestroyed);
 	}
 
 	StartEncounter(RegisteredHealthComponents.Num());
@@ -198,6 +206,26 @@ void UVectorEncounterComponent::RegisterExistingEnemies()
 
 void UVectorEncounterComponent::HandleRegisteredEnemyDeath()
 {
+	NotifyEnemyDefeated();
+}
+
+void UVectorEncounterComponent::HandleRegisteredEnemyDestroyed(AActor* DestroyedActor)
+{
+	AVectorEnemy* Enemy = Cast<AVectorEnemy>(DestroyedActor);
+	if (!Enemy
+		|| RegisteredEnemies.Remove(TWeakObjectPtr<AVectorEnemy>(Enemy)) == 0)
+	{
+		return;
+	}
+	const UVectorHealthComponent* Health =
+		Enemy->FindComponentByClass<UVectorHealthComponent>();
+	if (Health && Health->IsDead())
+	{
+		return;
+	}
+	UE_LOG(LogVectorEncounter, Log,
+		TEXT("Registered enemy removed while alive: enemy=%s remaining=%d total=%d recovery=COUNTED"),
+		*GetNameSafe(Enemy), RemainingEnemies, TotalEnemies);
 	NotifyEnemyDefeated();
 }
 
@@ -210,5 +238,14 @@ void UVectorEncounterComponent::ClearEnemyBindings()
 			Health->OnDeath.RemoveDynamic(this, &UVectorEncounterComponent::HandleRegisteredEnemyDeath);
 		}
 	}
+	for (const TWeakObjectPtr<AVectorEnemy>& Enemy : RegisteredEnemies)
+	{
+		if (Enemy.IsValid())
+		{
+			Enemy->OnDestroyed.RemoveDynamic(
+				this, &UVectorEncounterComponent::HandleRegisteredEnemyDestroyed);
+		}
+	}
 	RegisteredHealthComponents.Empty();
+	RegisteredEnemies.Empty();
 }

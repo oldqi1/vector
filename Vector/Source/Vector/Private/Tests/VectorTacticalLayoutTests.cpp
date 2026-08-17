@@ -55,6 +55,10 @@ bool FVectorTacticalLayoutConstraintsTest::RunTest(const FString& Parameters)
 			Layout.HasOpportunity(EVectorPhysicsOpportunity::TetherSwingArc));
 		TestTrue(FString::Printf(TEXT("Seed %d supports vertical play"), Seed),
 			Layout.HasOpportunity(EVectorPhysicsOpportunity::HeightDrop));
+		TestTrue(FString::Printf(TEXT("Seed %d has multiple real height layers"), Seed),
+			Layout.GetMaximumHeightLayerCount() >= 2);
+		TestTrue(FString::Printf(TEXT("Seed %d has a meaningful drop"), Seed),
+			Layout.GetMaximumHeightDifferenceCm() >= 150.0);
 		TestTrue(FString::Printf(TEXT("Seed %d meets score"), Seed),
 			Layout.TacticalScore >= 12.0);
 	}
